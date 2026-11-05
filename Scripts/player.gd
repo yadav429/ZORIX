@@ -1,0 +1,112 @@
+extends CharacterBody3D
+
+@export var speed: float = 6.0
+@export var sprint_speed: float = 10.0
+@export var jump_force: float = 5.0
+@export var gravity: float = 15.0
+@export var mouse_sensitivity: float = 0.004
+@export var acceleration: float = 22.0
+
+var mobile_input := Vector2.ZERO
+var is_sprinting := false
+
+var camera_pivot: Node3D
+var spring_arm: SpringArm3D
+var camera: Camera3D
+
+func _ready():
+    add_to_group("player")
+    floor_snap_length = 0.3
+
+    camera_pivot = Node3D.new()
+    camera_pivot.name = "CameraPivot"
+    camera_pivot.position = Vector3(0, 1.65, 0)
+    add_child(camera_pivot)
+
+    spring_arm = SpringArm3D.new()
+    spring_arm.name = "CameraArm"
+    spring_arm.spring_length = 5.5
+    spring_arm.margin = 0.2
+    spring_arm.collision_mask = 1
+    camera_pivot.add_child(spring_arm)
+
+    camera = Camera3D.new()
+    camera.name = "ThirdPersonCamera"
+    camera.fov = 75.0
+    spring_arm.add_child(camera)
+    camera.current = true
+
+func set_mobile_move(value: Vector2):
+    mobile_input = value.limit_length(1.0)
+
+func set_sprinting(value: bool):
+    is_sprinting = value
+
+func jump():
+    if is_on_floor():
+        velocity.y = jump_force
+
+func rotate_camera(horizontal: float, vertical: float):
+    camera_pivot.rotation.y -= horizontal * mouse_sensitivity
+    camera_pivot.rotation.x -= vertical * mouse_sensitivity
+
+    camera_pivot.rotation.x = clamp(
+        camera_pivot.rotation.x,
+        deg_to_rad(-55),
+        deg_to_rad(45)
+    )
+
+func _physics_process(delta):
+    if not is_on_floor():
+        velocity.y -= gravity * delta
+    elif velocity.y < 0:
+        velocity.y = 0
+
+    var keyboard = Input.get_vector(
+        "ui_left", "ui_right", "ui_up", "ui_down"
+    )
+
+    var input_dir = mobile_input if mobile_input.length() > 0.05 else keyboard
+
+    var basis = camera_pivot.global_transform.basis
+
+    var forward = -basis.z
+    var right = basis.x
+
+    forward.y = 0
+    right.y = 0
+
+    forward = forward.normalized()
+    right = right.normalized()
+
+    var direction = (
+        right * input_dir.x - forward * input_dir.y
+    ).normalized()
+
+    if direction.length() > 0.01:
+        var target_angle = atan2(-direction.x, -direction.z)
+
+        rotation.y = lerp_angle(
+            rotation.y,
+            target_angle,
+            min(delta * 10.0, 1.0)
+        )
+
+    var current_speed = sprint_speed if is_sprinting else speed
+
+    velocity.x = move_toward(
+        velocity.x,
+        direction.x * current_speed,
+        acceleration * delta
+    )
+
+    velocity.z = move_toward(
+        velocity.z,
+        direction.z * current_speed,
+        acceleration * delta
+    )
+
+    if Input.is_action_just_pressed("ui_accept"):
+        jump()
+
+    move_and_slide()

@@ -1,0 +1,64 @@
+extends Node3D
+
+func part(mesh: Mesh, material: Material, pos: Vector3, size: Vector3):
+    var obj = MeshInstance3D.new()
+    obj.mesh = mesh
+    obj.material_override = material
+    obj.position = pos
+    obj.scale = size
+    add_child(obj)
+
+func box(mat, pos, size):
+    var m = BoxMesh.new()
+    part(m, mat, pos, size)
+
+func capsule(mat, pos, radius, height):
+    var m = CapsuleMesh.new()
+    m.radius = radius
+    m.height = height
+    part(m, mat, pos, Vector3.ONE)
+
+func _ready():
+    var armor = StandardMaterial3D.new()
+    armor.albedo_color = Color(0.055, 0.09, 0.16)
+    armor.metallic = 0.8
+    armor.roughness = 0.25
+
+    var blue = StandardMaterial3D.new()
+    blue.albedo_color = Color(0.02, 0.65, 1.0)
+    blue.emission_enabled = true
+    blue.emission = Color(0.0, 0.35, 1.0)
+    blue.metallic = 0.5
+
+    var visor = StandardMaterial3D.new()
+    visor.albedo_color = Color(0.0, 0.8, 1.0)
+    visor.emission_enabled = true
+    visor.emission = Color(0.0, 0.5, 1.0)
+
+    var dark = StandardMaterial3D.new()
+    dark.albedo_color = Color(0.015, 0.025, 0.045)
+    dark.metallic = 0.5
+
+    # Body and chest armor
+    box(armor, Vector3(0, 1.05, 0), Vector3(0.85, 0.85, 0.42))
+    box(blue, Vector3(0, 1.25, -0.22), Vector3(0.48, 0.10, 0.035))
+    box(dark, Vector3(0, 0.55, 0), Vector3(0.62, 0.30, 0.34))
+
+    # Helmet
+    var head = SphereMesh.new()
+    part(head, armor, Vector3(0, 1.85, 0), Vector3(0.48, 0.52, 0.46))
+    box(visor, Vector3(0, 1.91, -0.22), Vector3(0.34, 0.12, 0.055))
+    box(blue, Vector3(0, 2.12, 0), Vector3(0.30, 0.045, 0.30))
+
+    # Arms
+    for side in [-1.0, 1.0]:
+        box(armor, Vector3(side * 0.58, 1.12, 0), Vector3(0.27, 0.58, 0.30))
+        box(blue, Vector3(side * 0.58, 1.30, -0.17), Vector3(0.18, 0.08, 0.04))
+        box(dark, Vector3(side * 0.58, 0.76, 0), Vector3(0.22, 0.30, 0.24))
+        box(armor, Vector3(side * 0.23, 0.22, 0), Vector3(0.28, 0.62, 0.32))
+        box(dark, Vector3(side * 0.23, -0.13, -0.04), Vector3(0.32, 0.20, 0.46))
+        box(blue, Vector3(side * 0.23, 0.38, -0.18), Vector3(0.20, 0.07, 0.035))
+
+    # Back energy pack
+    box(dark, Vector3(0, 1.12, 0.28), Vector3(0.48, 0.65, 0.20))
+    box(blue, Vector3(0, 1.15, 0.40), Vector3(0.22, 0.38, 0.04))
