@@ -13,6 +13,7 @@ class JoystickVisual extends Control:
 var player: CharacterBody3D
 var joystick: JoystickVisual
 var jump_button: Button
+var fire_button: Button
 var hint_label: Label
 
 var joystick_id := -1
@@ -24,7 +25,7 @@ const JOYSTICK_RADIUS := 65.0
 const JOYSTICK_DETECT_RADIUS := 110.0
 
 func _ready():
-    print("ZORIX MOBILE UI READY")
+    print("ZORIX COMBAT UI READY")
 
     player = get_tree().get_first_node_in_group("player")
     screen_size = get_viewport().get_visible_rect().size
@@ -46,6 +47,19 @@ func _ready():
     root.add_child(jump_button)
     jump_button.pressed.connect(_jump)
 
+    fire_button = Button.new()
+    fire_button.text = "FIRE"
+    fire_button.custom_minimum_size = Vector2(115, 95)
+    fire_button.add_theme_font_size_override("font_size", 23)
+    fire_button.add_theme_color_override(
+        "font_color", Color("#ffffff")
+    )
+    fire_button.add_theme_color_override(
+        "font_pressed_color", Color("#ffccaa")
+    )
+    root.add_child(fire_button)
+    fire_button.pressed.connect(_fire)
+
     hint_label = Label.new()
     hint_label.text = "SWIPE TO LOOK"
     hint_label.add_theme_color_override("font_color", Color.WHITE)
@@ -63,6 +77,7 @@ func update_size():
 
     joystick.position = Vector2(35, screen_size.y - 195)
     jump_button.position = Vector2(screen_size.x - 135, screen_size.y - 115)
+    fire_button.position = Vector2(screen_size.x - 155, screen_size.y - 235)
     hint_label.position = Vector2(screen_size.x - 180, screen_size.y - 180)
 
 func get_player():
@@ -98,6 +113,9 @@ func _input(event):
             if jump_button.get_global_rect().has_point(event.position):
                 return
 
+            if fire_button.get_global_rect().has_point(event.position):
+                return
+
             var center = joystick.position + joystick.size / 2.0
             var distance = event.position.distance_to(center)
 
@@ -125,9 +143,24 @@ func _input(event):
 
 func _jump():
     var p = get_player()
+    if p != null and p.has_method("jump"):
+        p.jump()
 
-    if p != null and p.is_on_floor():
-        if p.has_method("jump"):
-            p.jump()
-        else:
-            p.velocity.y = p.jump_force if "jump_force" in p else 7.0
+func _fire():
+    print("ZORIX FIRE BUTTON PRESSED")
+
+    var p = get_player()
+
+    if p == null:
+        print("ZORIX ERROR: PLAYER NOT FOUND")
+        hint_label.text = "PLAYER NOT FOUND"
+        return
+
+    if not p.has_method("shoot"):
+        print("ZORIX ERROR: SHOOT METHOD MISSING")
+        hint_label.text = "GUN ERROR"
+        return
+
+    print("ZORIX: SHOOT FUNCTION CALLED")
+    hint_label.text = "FIRE!"
+    p.shoot()
