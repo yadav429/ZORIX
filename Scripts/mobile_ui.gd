@@ -16,16 +16,19 @@ var jump_button: Button
 var fire_button: Button
 var hint_label: Label
 
+var firing := false
 var joystick_id := -1
 var camera_id := -1
+var jump_id := -1
+var fire_id := -1
+
 var joystick_value := Vector2.ZERO
 var screen_size := Vector2.ZERO
 
 const JOYSTICK_RADIUS := 65.0
-const JOYSTICK_DETECT_RADIUS := 110.0
 
 func _ready():
-    print("ZORIX COMBAT UI READY")
+    print("ZORIX MULTITOUCH SYSTEM READY")
 
     player = get_tree().get_first_node_in_group("player")
     screen_size = get_viewport().get_visible_rect().size
@@ -43,22 +46,20 @@ func _ready():
     jump_button = Button.new()
     jump_button.text = "JUMP"
     jump_button.custom_minimum_size = Vector2(105, 85)
+    jump_button.size = Vector2(105, 85)
+    jump_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
     jump_button.add_theme_font_size_override("font_size", 22)
     root.add_child(jump_button)
-    jump_button.pressed.connect(_jump)
 
     fire_button = Button.new()
     fire_button.text = "FIRE"
     fire_button.custom_minimum_size = Vector2(115, 95)
+    fire_button.size = Vector2(115, 95)
+    fire_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
     fire_button.add_theme_font_size_override("font_size", 23)
-    fire_button.add_theme_color_override(
-        "font_color", Color("#ffffff")
-    )
-    fire_button.add_theme_color_override(
-        "font_pressed_color", Color("#ffccaa")
-    )
+    fire_button.add_theme_color_override("font_color", Color.WHITE)
+    fire_button.add_theme_color_override("font_pressed_color", Color("#ffccaa"))
     root.add_child(fire_button)
-    fire_button.pressed.connect(_fire)
 
     hint_label = Label.new()
     hint_label.text = "SWIPE TO LOOK"
@@ -94,7 +95,7 @@ func update_joystick(pos: Vector2):
     joystick.queue_redraw()
 
     var p = get_player()
-    if p != null and p.has_method("set_mobile_move"):
+    if p != null:
         p.set_mobile_move(joystick_value)
 
 func reset_joystick():
@@ -104,63 +105,88 @@ func reset_joystick():
     joystick.queue_redraw()
 
     var p = get_player()
-    if p != null and p.has_method("set_mobile_move"):
+    if p != null:
         p.set_mobile_move(Vector2.ZERO)
 
 func _input(event):
     if event is InputEventScreenTouch:
+
         if event.pressed:
-            if jump_button.get_global_rect().has_point(event.position):
+            # JUMP TOUCH
+            if jump_id == -1 and jump_button.get_global_rect().has_point(event.position):
+                jump_id = event.index
+                _jump()
+                hint_label.text = "JUMP!"
+                get_viewport().set_input_as_handled()
                 return
 
-            if fire_button.get_global_rect().has_point(event.position):
+            # FIRE TOUCH
+            if fire_id == -1 and fire_button.get_global_rect().has_point(event.position):
+                fire_id = event.index
+                _fire()
+                hint_label.text = "FIRING!"
+                get_viewport().set_input_as_handled()
                 return
 
-            var center = joystick.position + joystick.size / 2.0
-            var distance = event.position.distance_to(center)
-
-            if joystick_id == -1 and distance <= JOYSTICK_DETECT_RADIUS:
+            # JOYSTICK TOUCH
+            if joystick_id == -1 and event.position.x < screen_size.x * 0.5:
                 joystick_id = event.index
                 update_joystick(event.position)
+                get_viewport().set_input_as_handled()
+                return
 
-            elif camera_id == -1 and event.position.x > screen_size.x * 0.55:
+            # CAMERA TOUCH
+            if camera_id == -1 and event.position.x > screen_size.x * 0.55:
                 camera_id = event.index
+                get_viewport().set_input_as_handled()
+                return
+
         else:
+            # RELEASE JOYSTICK
             if event.index == joystick_id:
                 reset_joystick()
 
+            # RELEASE FIRE
+            if event.index == fire_id:
+                fire_id = -1
+                _stop_fire()
+
+            # RELEASE JUMP
+            if event.index == jump_id:
+                jump_id = -1
+
+            # RELEASE CAMERA
             if event.index == camera_id:
                 camera_id = -1
 
     elif event is InputEventScreenDrag:
+
         if event.index == joystick_id:
             update_joystick(event.position)
+            get_viewport().set_input_as_handled()
 
         elif event.index == camera_id:
             var p = get_player()
-            if p != null and p.has_method("rotate_camera"):
+            if p != null:
                 p.rotate_camera(event.relative.x, event.relative.y)
+            get_viewport().set_input_as_handled()
 
 func _jump():
     var p = get_player()
-    if p != null and p.has_method("jump"):
+    if p != null:
         p.jump()
+        print("ZORIX JUMP EXECUTED")
 
 func _fire():
-    print("ZORIX FIRE BUTTON PRESSED")
+    firing = false
+    print("ZORIX SINGLE FIRE")
 
     var p = get_player()
+    if p != null:
+        p.shoot()
 
-    if p == null:
-        print("ZORIX ERROR: PLAYER NOT FOUND")
-        hint_label.text = "PLAYER NOT FOUND"
-        return
+func _stop_fire():
+    firing = false
 
-    if not p.has_method("shoot"):
-        print("ZORIX ERROR: SHOOT METHOD MISSING")
-        hint_label.text = "GUN ERROR"
-        return
-
-    print("ZORIX: SHOOT FUNCTION CALLED")
-    hint_label.text = "FIRE!"
-    p.shoot()
+func _process(_delta):
+    pass
