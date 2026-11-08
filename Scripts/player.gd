@@ -200,8 +200,7 @@ func shoot():
         Vector3(0, 0.015, -0.73)
     )
 
-    create_tracer(muzzle, end_point)
-    create_muzzle_flash()
+    # Visual effects temporarily disabled for freeze testing
 
 func _physics_process(delta):
 
