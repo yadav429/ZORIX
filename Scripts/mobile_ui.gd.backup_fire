@@ -1,0 +1,166 @@
+extends CanvasLayer
+
+class JoystickVisual extends Control:
+    var value := Vector2.ZERO
+
+    func _draw():
+        var center = size / 2.0
+        draw_circle(center, 72, Color(0.05, 0.08, 0.10, 0.45))
+        draw_arc(center, 72, 0, TAU, 64, Color(0.8, 0.9, 1, 0.65), 3)
+        draw_circle(center + value * 42, 29, Color(0.35, 0.75, 1, 0.8))
+        draw_arc(center + value * 42, 29, 0, TAU, 48, Color.WHITE, 2)
+
+var player: CharacterBody3D
+var joystick: JoystickVisual
+var jump_button: Button
+var fire_button: Button
+var hint_label: Label
+
+var joystick_id := -1
+var camera_id := -1
+var joystick_value := Vector2.ZERO
+var screen_size := Vector2.ZERO
+
+const JOYSTICK_RADIUS := 65.0
+const JOYSTICK_DETECT_RADIUS := 110.0
+
+func _ready():
+    print("ZORIX COMBAT UI READY")
+
+    player = get_tree().get_first_node_in_group("player")
+    screen_size = get_viewport().get_visible_rect().size
+
+    var root = Control.new()
+    root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    root.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    add_child(root)
+
+    joystick = JoystickVisual.new()
+    joystick.size = Vector2(160, 160)
+    joystick.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    root.add_child(joystick)
+
+    jump_button = Button.new()
+    jump_button.text = "JUMP"
+    jump_button.custom_minimum_size = Vector2(105, 85)
+    jump_button.add_theme_font_size_override("font_size", 22)
+    root.add_child(jump_button)
+    jump_button.pressed.connect(_jump)
+
+    fire_button = Button.new()
+    fire_button.text = "FIRE"
+    fire_button.custom_minimum_size = Vector2(115, 95)
+    fire_button.add_theme_font_size_override("font_size", 23)
+    fire_button.add_theme_color_override(
+        "font_color", Color("#ffffff")
+    )
+    fire_button.add_theme_color_override(
+        "font_pressed_color", Color("#ffccaa")
+    )
+    root.add_child(fire_button)
+    fire_button.pressed.connect(_fire)
+
+    hint_label = Label.new()
+    hint_label.text = "SWIPE TO LOOK"
+    hint_label.add_theme_color_override("font_color", Color.WHITE)
+    hint_label.add_theme_font_size_override("font_size", 14)
+    root.add_child(hint_label)
+
+    get_viewport().size_changed.connect(update_size)
+    update_size()
+
+func update_size():
+    screen_size = get_viewport().get_visible_rect().size
+
+    if joystick == null:
+        return
+
+    joystick.position = Vector2(35, screen_size.y - 195)
+    jump_button.position = Vector2(screen_size.x - 135, screen_size.y - 115)
+    fire_button.position = Vector2(screen_size.x - 155, screen_size.y - 235)
+    hint_label.position = Vector2(screen_size.x - 180, screen_size.y - 180)
+
+func get_player():
+    if player == null or not is_instance_valid(player):
+        player = get_tree().get_first_node_in_group("player")
+    return player
+
+func update_joystick(pos: Vector2):
+    var center = joystick.position + joystick.size / 2.0
+    var difference = pos - center
+
+    joystick_value = (difference / JOYSTICK_RADIUS).limit_length(1.0)
+    joystick.value = joystick_value
+    joystick.queue_redraw()
+
+    var p = get_player()
+    if p != null and p.has_method("set_mobile_move"):
+        p.set_mobile_move(joystick_value)
+
+func reset_joystick():
+    joystick_id = -1
+    joystick_value = Vector2.ZERO
+    joystick.value = Vector2.ZERO
+    joystick.queue_redraw()
+
+    var p = get_player()
+    if p != null and p.has_method("set_mobile_move"):
+        p.set_mobile_move(Vector2.ZERO)
+
+func _input(event):
+    if event is InputEventScreenTouch:
+        if event.pressed:
+            if jump_button.get_global_rect().has_point(event.position):
+                return
+
+            if fire_button.get_global_rect().has_point(event.position):
+                return
+
+            var center = joystick.position + joystick.size / 2.0
+            var distance = event.position.distance_to(center)
+
+            if joystick_id == -1 and distance <= JOYSTICK_DETECT_RADIUS:
+                joystick_id = event.index
+                update_joystick(event.position)
+
+            elif camera_id == -1 and event.position.x > screen_size.x * 0.55:
+                camera_id = event.index
+        else:
+            if event.index == joystick_id:
+                reset_joystick()
+
+            if event.index == camera_id:
+                camera_id = -1
+
+    elif event is InputEventScreenDrag:
+        if event.index == joystick_id:
+            update_joystick(event.position)
+
+        elif event.index == camera_id:
+            var p = get_player()
+            if p != null and p.has_method("rotate_camera"):
+                p.rotate_camera(event.relative.x, event.relative.y)
+
+func _jump():
+    var p = get_player()
+    if p != null and p.has_method("jump"):
+        p.jump()
+
+func _fire():
+    print("ZORIX FIRE BUTTON PRESSED")
+
+    var p = get_player()
+
+    if p == null:
+        print("ZORIX ERROR: PLAYER NOT FOUND")
+        hint_label.text = "PLAYER NOT FOUND"
+        return
+
+    if not p.has_method("shoot"):
+        print("ZORIX ERROR: SHOOT METHOD MISSING")
+        hint_label.text = "GUN ERROR"
+        return
+
+    print("ZORIX: SHOOT FUNCTION CALLED")
+    hint_label.text = "FIRE!"
+    p.shoot()

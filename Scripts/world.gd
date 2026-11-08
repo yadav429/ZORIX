@@ -3,6 +3,7 @@ extends Node3D
 
 const PLAYER = preload("res://Scenes/Player.tscn")
 const MOBILE_UI = preload("res://Scripts/mobile_ui.gd")
+const ENEMY = preload("res://Scripts/enemy.gd")
 
 var rng = RandomNumberGenerator.new()
 
@@ -229,6 +230,11 @@ func _ready():
     var player = PLAYER.instantiate()
     player.position = Vector3(0, 0, 25)
     add_child(player)
+    # ENEMY SOLDIERS
+    for enemy_pos in [Vector3(0, 0, 8), Vector3(-5, 0, 5), Vector3(5, 0, 5)]:
+        var enemy = ENEMY.new()
+        enemy.position = enemy_pos
+        add_child(enemy)
 
     # MOBILE CONTROLS
     var ui = CanvasLayer.new()

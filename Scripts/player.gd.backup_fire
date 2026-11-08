@@ -1,0 +1,183 @@
+extends CharacterBody3D
+
+@export var speed: float = 6.0
+@export var sprint_speed: float = 10.0
+@export var jump_force: float = 5.0
+@export var gravity: float = 15.0
+@export var mouse_sensitivity: float = 0.004
+@export var acceleration: float = 22.0
+@export var shoot_cooldown: float = 0.25
+@export var bullet_range: float = 100.0
+
+var mobile_input := Vector2.ZERO
+var is_sprinting := false
+var shoot_timer := 0.0
+
+var camera_pivot: Node3D
+var spring_arm: SpringArm3D
+var camera: Camera3D
+
+func _ready():
+    add_to_group("player")
+    floor_snap_length = 0.3
+
+    camera_pivot = Node3D.new()
+    camera_pivot.name = "CameraPivot"
+    camera_pivot.position = Vector3(0, 1.65, 0)
+    camera_pivot.top_level = true
+    add_child(camera_pivot)
+
+    spring_arm = SpringArm3D.new()
+    spring_arm.name = "CameraArm"
+    spring_arm.spring_length = 5.5
+    spring_arm.margin = 0.2
+    spring_arm.collision_mask = 1
+    camera_pivot.add_child(spring_arm)
+
+    camera = Camera3D.new()
+    camera.name = "ThirdPersonCamera"
+    camera.fov = 75.0
+    spring_arm.add_child(camera)
+    camera.current = true
+
+    create_gun()
+
+func create_gun():
+    var gun = Node3D.new()
+    gun.name = "SoldierGun"
+    gun.position = Vector3(0.43, 1.25, -0.32)
+    add_child(gun)
+
+    var dark = StandardMaterial3D.new()
+    dark.albedo_color = Color("#20252b")
+    dark.metallic = 0.65
+    dark.roughness = 0.35
+
+    var body = MeshInstance3D.new()
+    var body_mesh = BoxMesh.new()
+    body_mesh.size = Vector3(0.16, 0.18, 0.65)
+    body.mesh = body_mesh
+    body.material_override = dark
+    gun.add_child(body)
+
+    var barrel = MeshInstance3D.new()
+    var barrel_mesh = BoxMesh.new()
+    barrel_mesh.size = Vector3(0.07, 0.07, 0.48)
+    barrel.mesh = barrel_mesh
+    barrel.position = Vector3(0, 0.015, -0.48)
+    barrel.material_override = dark
+    gun.add_child(barrel)
+
+    var grip = MeshInstance3D.new()
+    var grip_mesh = BoxMesh.new()
+    grip_mesh.size = Vector3(0.10, 0.25, 0.12)
+    grip.mesh = grip_mesh
+    grip.position = Vector3(0, -0.19, 0.12)
+    grip.material_override = dark
+    gun.add_child(grip)
+
+func set_mobile_move(value: Vector2):
+    mobile_input = value.limit_length(1.0)
+
+func set_sprinting(value: bool):
+    is_sprinting = value
+
+func jump():
+    if is_on_floor():
+        velocity.y = jump_force
+
+func rotate_camera(horizontal: float, vertical: float):
+    camera_pivot.rotation.y -= horizontal * mouse_sensitivity
+    camera_pivot.rotation.x -= vertical * mouse_sensitivity
+
+    camera_pivot.rotation.x = clamp(
+        camera_pivot.rotation.x,
+        deg_to_rad(-55),
+        deg_to_rad(45)
+    )
+
+func shoot():
+    if shoot_timer > 0.0:
+        return
+
+    shoot_timer = shoot_cooldown
+
+    if camera == null:
+        return
+
+    var origin = camera.global_position
+    var direction = -camera.global_transform.basis.z
+    var target = origin + direction * bullet_range
+
+    var query = PhysicsRayQueryParameters3D.create(origin, target)
+    query.exclude = [get_rid()]
+    query.collision_mask = 1
+
+    var hit = get_world_3d().direct_space_state.intersect_ray(query)
+
+    if hit:
+        var object = hit.collider
+        print("ZORIX HIT: ", object.name)
+
+        if object.has_method("take_damage"):
+            object.take_damage(25)
+
+    else:
+        print("ZORIX: SHOT FIRED - NO TARGET")
+
+func _physics_process(delta):
+    camera_pivot.global_position = global_position + Vector3(0, 1.65, 0)
+
+    shoot_timer = maxf(0.0, shoot_timer - delta)
+
+    if not is_on_floor():
+        velocity.y -= gravity * delta
+    elif velocity.y < 0:
+        velocity.y = 0
+
+    var keyboard = Input.get_vector(
+        "ui_left", "ui_right", "ui_up", "ui_down"
+    )
+
+    var input_dir = mobile_input if mobile_input.length() > 0.05 else keyboard
+
+    var basis = camera_pivot.global_transform.basis
+    var forward = -basis.z
+    var right = basis.x
+
+    forward.y = 0
+    right.y = 0
+
+    forward = forward.normalized()
+    right = right.normalized()
+
+    var direction = (
+        right * input_dir.x - forward * input_dir.y
+    ).normalized()
+
+    if direction.length() > 0.01:
+        var target_angle = atan2(-direction.x, -direction.z)
+        rotation.y = lerp_angle(
+            rotation.y,
+            target_angle,
+            min(delta * 10.0, 1.0)
+        )
+
+    var current_speed = sprint_speed if is_sprinting else speed
+
+    velocity.x = move_toward(
+        velocity.x,
+        direction.x * current_speed,
+        acceleration * delta
+    )
+
+    velocity.z = move_toward(
+        velocity.z,
+        direction.z * current_speed,
+        acceleration * delta
+    )
+
+    if Input.is_action_just_pressed("ui_accept"):
+        jump()
+
+    move_and_slide()
