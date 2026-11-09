@@ -2,71 +2,99 @@ extends Node
 
 signal login_completed(player_name: String)
 signal public_server_loaded(host: String, port: int)
-var request_kind := "auth"
 
 const SETTINGS_PATH := "user://zorix_account.cfg"
 var request: HTTPRequest
 var api_url_input: LineEdit
-var username_input: LineEdit
-var password_input: LineEdit
 var status_label: Label
-var login_button: Button
-var register_button: Button
+var google_button: Button
+var facebook_button: Button
+var guest_button: Button
+var advanced_box: VBoxContainer
 var token := ""
 var player_name := ""
 var api_base_url := ""
+var request_kind := "auth"
 
 func _ready():
     request = HTTPRequest.new()
-    request.timeout = 15.0
+    request.timeout = 20.0
     add_child(request)
     request.request_completed.connect(_on_request_completed)
     _load_session()
 
 func build_ui(parent: VBoxContainer):
     var heading = Label.new()
-    heading.text = "PLAYER ACCOUNT • PUBLIC ONLINE"
-    heading.add_theme_color_override("font_color", Color("#62d6c6"))
+    heading.text = "WELCOME TO ZORIX"
+    heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    heading.add_theme_font_size_override("font_size", 24)
+    heading.add_theme_color_override("font_color", Color("#f3f7f4"))
     parent.add_child(heading)
 
+    var subtitle = Label.new()
+    subtitle.text = "CHOOSE HOW YOU WANT TO PLAY"
+    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    subtitle.add_theme_color_override("font_color", Color("#62d6c6"))
+    parent.add_child(subtitle)
+
+    google_button = _make_login_button("CONTINUE WITH GOOGLE", Color("#f3f3f3"), Color("#20252a"))
+    google_button.pressed.connect(_google_login)
+    parent.add_child(google_button)
+
+    facebook_button = _make_login_button("CONTINUE WITH FACEBOOK", Color("#1877f2"), Color.WHITE)
+    facebook_button.pressed.connect(_facebook_login)
+    parent.add_child(facebook_button)
+
+    guest_button = _make_login_button("PLAY AS GUEST", Color("#d9782d"), Color.WHITE)
+    guest_button.pressed.connect(_guest_login)
+    parent.add_child(guest_button)
+
+    var advanced = Button.new()
+    advanced.text = "ADVANCED • SERVER SETTINGS"
+    advanced.flat = true
+    advanced.custom_minimum_size.y = 38
+    parent.add_child(advanced)
+
+    advanced_box = VBoxContainer.new()
+    advanced_box.visible = false
+    parent.add_child(advanced_box)
+    advanced.pressed.connect(func(): advanced_box.visible = not advanced_box.visible)
+
+    var api_label = Label.new()
+    api_label.text = "Account API URL"
+    advanced_box.add_child(api_label)
     api_url_input = LineEdit.new()
-    api_url_input.placeholder_text = "API URL (example: https://your-domain.com)"
+    api_url_input.placeholder_text = "https://your-zorix-api-domain"
     api_url_input.text = api_base_url
-    api_url_input.custom_minimum_size.y = 46
-    parent.add_child(api_url_input)
-
-    username_input = LineEdit.new()
-    username_input.placeholder_text = "Username (3-20 characters)"
-    username_input.custom_minimum_size.y = 46
-    parent.add_child(username_input)
-
-    password_input = LineEdit.new()
-    password_input.placeholder_text = "Password (minimum 8 characters)"
-    password_input.secret = true
-    password_input.custom_minimum_size.y = 46
-    parent.add_child(password_input)
-
-    var actions = HBoxContainer.new()
-    parent.add_child(actions)
-    register_button = Button.new()
-    register_button.text = "REGISTER"
-    register_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    register_button.custom_minimum_size.y = 48
-    register_button.pressed.connect(func(): _send_auth("/api/register"))
-    actions.add_child(register_button)
-    login_button = Button.new()
-    login_button.text = "LOGIN"
-    login_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    login_button.custom_minimum_size.y = 48
-    login_button.pressed.connect(func(): _send_auth("/api/login"))
-    actions.add_child(login_button)
+    api_url_input.custom_minimum_size.y = 44
+    advanced_box.add_child(api_url_input)
 
     status_label = Label.new()
-    status_label.text = "Register or login to load the public lobby."
+    status_label.text = "Google/Facebook require provider setup. Guest login can be used when the ZORIX API is online."
     status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     status_label.add_theme_color_override("font_color", Color("#d8e5e6"))
     parent.add_child(status_label)
     _set_busy(false)
+
+func _make_login_button(caption: String, background: Color, foreground: Color) -> Button:
+    var button = Button.new()
+    button.text = caption
+    button.custom_minimum_size.y = 54
+    button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    button.add_theme_font_size_override("font_size", 16)
+    button.add_theme_color_override("font_color", foreground)
+    var style = StyleBoxFlat.new()
+    style.bg_color = background
+    style.set_corner_radius_all(12)
+    style.content_margin_top = 10
+    style.content_margin_bottom = 10
+    button.add_theme_stylebox_override("normal", style)
+    var hover = style.duplicate()
+    hover.bg_color = background.lightened(0.1)
+    button.add_theme_stylebox_override("hover", hover)
+    button.add_theme_stylebox_override("pressed", hover)
+    return button
 
 func _load_session():
     var cfg = ConfigFile.new()
@@ -82,65 +110,62 @@ func _save_session():
     cfg.set_value("account", "api_url", api_base_url)
     cfg.save(SETTINGS_PATH)
 
-func _send_auth(path: String):
-    api_base_url = api_url_input.text.strip_edges().trim_suffix("/")
-    var username = username_input.text.strip_edges()
-    var password = password_input.text
-    if not api_base_url.begins_with("https://") and not api_base_url.begins_with("http://"):
-        status_label.text = "Valid API URL enter karein (HTTPS recommended)."
+func _api_base() -> String:
+    if api_url_input != null and not api_url_input.text.strip_edges().is_empty():
+        api_base_url = api_url_input.text.strip_edges().trim_suffix("/")
+    return api_base_url
+
+func _guest_login():
+    var base = _api_base()
+    if not base.begins_with("https://"):
+        status_label.text = "Advanced settings mein valid HTTPS API URL enter karein."
         return
-    if username.length() < 3 or password.length() < 8:
-        status_label.text = "Username 3+ aur password 8+ characters hona chahiye."
-        return
-    var headers = PackedStringArray(["Content-Type: application/json"])
-    var payload = JSON.stringify({"username": username, "password": password})
     _set_busy(true)
-    status_label.text = "Connecting to ZORIX account service..."
-    request_kind = "auth"
-    var err = request.request(api_base_url + path, headers, HTTPClient.METHOD_POST, payload)
+    status_label.text = "Creating secure guest account..."
+    request_kind = "guest"
+    var err = request.request(base + "/api/guest", PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST, "{}")
     if err != OK:
         _set_busy(false)
         status_label.text = "Request start nahi hui: " + error_string(err)
+
+func _google_login():
+    status_label.text = "Google sign-in button ready. Google OAuth app credentials and Android callback setup are required before sign-in can be activated."
+
+func _facebook_login():
+    status_label.text = "Facebook sign-in button ready. Meta app credentials and Android callback setup are required before sign-in can be activated."
 
 func _on_request_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray):
     _set_busy(false)
     var parsed = JSON.parse_string(body.get_string_from_utf8())
     if result != HTTPRequest.RESULT_SUCCESS:
-        status_label.text = "Network error. API URL aur internet check karein."
+        status_label.text = "Network error. Internet aur API URL check karein."
         return
     if code < 200 or code >= 300:
-        status_label.text = str(parsed.get("detail", "Login/Register failed")) if parsed is Dictionary else "Request failed."
-        return
-    if request_kind == "lobby":
-        var servers = parsed.get("servers", []) if parsed is Dictionary else []
-        if servers.size() > 0:
-            var server_info = servers[0]
-            status_label.text = "Public lobby ready • " + str(server_info.get("name", "ZORIX Server"))
-            public_server_loaded.emit(str(server_info.get("host", "")), int(server_info.get("port", 24560)))
-        else:
-            status_label.text = str(parsed.get("message", "No public game server configured")) if parsed is Dictionary else "Invalid lobby response."
+        status_label.text = str(parsed.get("detail", "Login failed")) if parsed is Dictionary else "Request failed."
         return
     if not parsed is Dictionary or not parsed.has("token"):
         status_label.text = "Invalid account server response."
         return
     token = str(parsed["token"])
-    player_name = str(parsed.get("player", {}).get("username", "Player"))
+    player_name = str(parsed.get("player", {}).get("username", "Guest"))
     _save_session()
-    status_label.text = "Logged in: " + player_name + " • Loading public lobby..."
+    status_label.text = "Welcome, " + player_name + " • Loading public lobby..."
     _load_public_lobby()
 
 func _load_public_lobby():
     var headers = PackedStringArray(["Authorization: Bearer " + token])
     request_kind = "lobby"
-    var err = request.request(api_base_url + "/api/lobby", headers, HTTPClient.METHOD_GET)
+    var err = request.request(_api_base() + "/api/lobby", headers, HTTPClient.METHOD_GET)
     if err != OK:
         status_label.text = "Lobby request start nahi hui: " + error_string(err)
 
 func _set_busy(busy: bool):
-    if register_button != null:
-        register_button.disabled = busy
-    if login_button != null:
-        login_button.disabled = busy
+    if guest_button != null:
+        guest_button.disabled = busy
+    if google_button != null:
+        google_button.disabled = busy
+    if facebook_button != null:
+        facebook_button.disabled = busy
 
 func is_logged_in() -> bool:
     return not token.is_empty()
@@ -149,8 +174,6 @@ func get_player_name() -> String:
     return player_name
 
 func get_public_server() -> Dictionary:
-    if status_label != null and status_label.text.find("No public game server configured") >= 0:
-        return {}
     return {}
 
 func logout():
@@ -158,4 +181,4 @@ func logout():
     player_name = ""
     _save_session()
     if status_label != null:
-        status_label.text = "Logged out. Login to continue."
+        status_label.text = "Logged out. Choose a login option."
