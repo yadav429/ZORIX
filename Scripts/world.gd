@@ -186,8 +186,13 @@ func _ready():
     var sun = DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-48, -35, 0)
     sun.light_energy = 1.2
-    sun.shadow_enabled = true
+    var graphics_config = ConfigFile.new()
+    var performance_mode = false
+    if graphics_config.load("user://zorix_settings.cfg") == OK:
+        performance_mode = bool(graphics_config.get_value("graphics", "performance", false))
+    sun.shadow_enabled = not performance_mode
     sun.directional_shadow_max_distance = 65.0
+    sun.add_to_group("world_lights")
     add_child(sun)
 
     # SKY AND AMBIENT LIGHT
