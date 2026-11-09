@@ -63,7 +63,6 @@ var interact_id := -1
 
 var joystick_value := Vector2.ZERO
 var screen_size := Vector2.ZERO
-var last_weapon_visual_index := -1
 
 const JOYSTICK_RADIUS := 65.0
 
@@ -323,9 +322,6 @@ func _process(delta):
         if fps_label != null:
             fps_label.text = "FPS %d" % Engine.get_frames_per_second()
     var p = get_player()
-    if p != null and p.current_weapon_index != last_weapon_visual_index:
-        last_weapon_visual_index = p.current_weapon_index
-        p.refresh_gun_model()
     if firing and p != null and not p.is_dead:
         p.shoot()
     if p != null and status_label != null:
