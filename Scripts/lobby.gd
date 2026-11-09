@@ -15,6 +15,7 @@ var mode_picker: OptionButton
 var graphics_quality := "balanced"
 var fps_limit := 60
 var selected_mode := "Squad"
+var selected_team_size := 4
 var selected_game_mode := "battle_royale"
 var player_account: Node
 
@@ -80,6 +81,7 @@ func _load_settings():
             graphics_quality = "balanced"
         fps_limit = clampi(int(config.get_value("graphics", "fps_limit", 60)), 30, 90)
         selected_game_mode = str(config.get_value("game", "mode", "battle_royale"))
+        selected_team_size = clampi(int(config.get_value("game", "team_size", 4)), 1, 4)
 
 func _save_settings():
     var config = ConfigFile.new()
@@ -182,7 +184,8 @@ func _build_lobby():
     mode_picker.add_item("SOLO  •  1 PLAYER PER TEAM")
     mode_picker.add_item("DUO  •  2 PLAYERS PER TEAM")
     mode_picker.add_item("SQUAD  •  4 PLAYERS PER TEAM")
-    mode_picker.select(2)
+    mode_picker.select([1, 2, 4].find(selected_team_size))
+    selected_mode = ["Solo", "Duo", "Squad"][mode_picker.selected]
     mode_picker.item_selected.connect(_on_mode_selected)
     mode_picker.custom_minimum_size.y = 48
     content.add_child(mode_picker)
