@@ -26,3 +26,7 @@ This branch layers gameplay rules on top of PR #5's player-spawn/transform proto
 3. Run offline Tactical 5v5: move to Site A/B, plant, then use a defender peer to defuse.
 4. Test two devices on the same Wi-Fi.
 5. Increase clients gradually (2, 5, 10...) before considering a 50-player test.
+
+
+## Build status note
+The repository workflow currently exports an Android APK only. The PR head must have its own completed Actions run before distributing a build; earlier runs on intermediate commits do not validate later edits.
