@@ -121,3 +121,12 @@ def lobby(player=Depends(current_player)):
         servers.append({"name": "ZORIX Public Match", "host": GAME_HOST, "port": GAME_PORT,
                         "mode": GAME_MODE, "max_players": MAX_PLAYERS, "status": "configured"})
     return {"player": player, "servers": servers, "message": "No public game server configured" if not servers else "Select a server"}
+
+
+# Bundled player social, matchmaking and progression API.
+# Support both CI/package import (auth.app) and the Docker image's app module.
+try:
+    from .game_features import install_game_feature_routes
+except ImportError:
+    from game_features import install_game_feature_routes
+install_game_feature_routes(app, db, current_player)
