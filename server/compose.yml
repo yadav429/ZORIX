@@ -1,4 +1,20 @@
 services:
+  zorix-auth:
+    build:
+      context: ..
+      dockerfile: auth/Dockerfile
+    restart: unless-stopped
+    environment:
+      ZORIX_AUTH_DB: /data/zorix_auth.sqlite3
+      ZORIX_JWT_SECRET: ${ZORIX_JWT_SECRET:?Set a long random ZORIX_JWT_SECRET in .env}
+      ZORIX_GAME_HOST: ${ZORIX_GAME_HOST:-}
+      ZORIX_GAME_PORT: ${PORT:-24560}
+      ZORIX_GAME_MODE: ${GAME_MODE:-battle_royale}
+      ZORIX_MAX_PLAYERS: ${MAX_PLAYERS:-50}
+    volumes:
+      - zorix-auth-data:/data
+    ports:
+      - "${AUTH_PORT:-8080}:8080"
   zorix-server:
     build:
       context: ..
@@ -13,3 +29,5 @@ services:
     ports:
       - "${PORT:-24560}:${PORT:-24560}/udp"
     init: true
+volumes:
+  zorix-auth-data:
