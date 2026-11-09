@@ -4,6 +4,8 @@ const PLAYER = preload("res://Scenes/Player.tscn")
 const MOBILE_UI = preload("res://Scripts/mobile_ui.gd")
 const ENEMY = preload("res://Scripts/enemy.gd")
 const FRIENDLY = preload("res://Scripts/friendly_soldier.gd")
+const LOOT = preload("res://Scripts/loot_pickup.gd")
+const MATCH_RULES = preload("res://Scripts/match_rules.gd")
 
 var rng = RandomNumberGenerator.new()
 
@@ -131,6 +133,12 @@ func _build_tactical_mode():
     world_env.environment = env
     add_child(world_env)
 
+    var match_rules = Node3D.new()
+    match_rules.name = "MatchRules"
+    match_rules.add_to_group("match_rules")
+    match_rules.set_script(MATCH_RULES)
+    add_child(match_rules)
+
     var player = null
     if multiplayer.is_server():
         player = player_spawner.spawn({"peer_id": multiplayer.get_unique_id(), "spawn_position": Vector3(0, 0, 35)})
@@ -172,6 +180,16 @@ func _build_tactical_mode():
 var player_spawner: MultiplayerSpawner
 
 func _spawn_network_player(data: Variant) -> Node:
+    var entity_type := str(data.get("entity_type", "player"))
+    if entity_type == "loot":
+        var pickup := Area3D.new()
+        pickup.set_script(LOOT)
+        pickup.name = "Loot_%s_%d" % [str(data.get("pickup_kind", "ammo")), int(data.get("loot_id", 0))]
+        pickup.pickup_kind = str(data.get("pickup_kind", "ammo"))
+        pickup.amount = int(data.get("amount", 30))
+        pickup.position = data.get("spawn_position", Vector3.ZERO)
+        return pickup
+
     var peer_id := int(data.get("peer_id", 1))
     var player := PLAYER.instantiate()
     player.name = "Player_%d" % peer_id
@@ -346,6 +364,12 @@ func _ready():
     var world_env = WorldEnvironment.new()
     world_env.environment = env
     add_child(world_env)
+
+    var match_rules = Node3D.new()
+    match_rules.name = "MatchRules"
+    match_rules.add_to_group("match_rules")
+    match_rules.set_script(MATCH_RULES)
+    add_child(match_rules)
 
     # PLAYER
     var player = null
