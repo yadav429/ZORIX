@@ -1,6 +1,8 @@
 extends Node
 
 signal login_completed(player_name: String)
+signal public_server_loaded(host: String, port: int)
+var request_kind := "auth"
 
 const SETTINGS_PATH := "user://zorix_account.cfg"
 var request: HTTPRequest
@@ -94,6 +96,7 @@ func _send_auth(path: String):
     var payload = JSON.stringify({"username": username, "password": password})
     _set_busy(true)
     status_label.text = "Connecting to ZORIX account service..."
+    request_kind = "auth"
     var err = request.request(api_base_url + path, headers, HTTPClient.METHOD_POST, payload)
     if err != OK:
         _set_busy(false)
@@ -108,6 +111,15 @@ func _on_request_completed(result: int, code: int, _headers: PackedStringArray, 
     if code < 200 or code >= 300:
         status_label.text = str(parsed.get("detail", "Login/Register failed")) if parsed is Dictionary else "Request failed."
         return
+    if request_kind == "lobby":
+        var servers = parsed.get("servers", []) if parsed is Dictionary else []
+        if servers.size() > 0:
+            var server_info = servers[0]
+            status_label.text = "Public lobby ready • " + str(server_info.get("name", "ZORIX Server"))
+            public_server_loaded.emit(str(server_info.get("host", "")), int(server_info.get("port", 24560)))
+        else:
+            status_label.text = str(parsed.get("message", "No public game server configured")) if parsed is Dictionary else "Invalid lobby response."
+        return
     if not parsed is Dictionary or not parsed.has("token"):
         status_label.text = "Invalid account server response."
         return
@@ -119,6 +131,7 @@ func _on_request_completed(result: int, code: int, _headers: PackedStringArray, 
 
 func _load_public_lobby():
     var headers = PackedStringArray(["Authorization: Bearer " + token])
+    request_kind = "lobby"
     var err = request.request(api_base_url + "/api/lobby", headers, HTTPClient.METHOD_GET)
     if err != OK:
         status_label.text = "Lobby request start nahi hui: " + error_string(err)
