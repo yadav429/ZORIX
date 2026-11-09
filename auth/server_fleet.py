@@ -68,6 +68,24 @@ def _server_auth(value: Optional[str]):
 def install_server_fleet_routes(app, db_factory, current_player):
     def init(con):
         con.executescript("""
+        -- These queue/match tables are also created by PR #14's feature routes.
+        -- Create them here too so server registration works before a player hits those routes.
+        CREATE TABLE IF NOT EXISTS match_queue (
+            player_id INTEGER PRIMARY KEY, mode TEXT NOT NULL, team_id INTEGER,
+            queued_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS team_members (
+            team_id INTEGER NOT NULL, player_id INTEGER NOT NULL,
+            joined_at INTEGER NOT NULL, PRIMARY KEY(team_id, player_id), UNIQUE(player_id)
+        );
+        CREATE TABLE IF NOT EXISTS game_matches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, mode TEXT NOT NULL,
+            status TEXT NOT NULL, created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS match_players (
+            match_id INTEGER NOT NULL, player_id INTEGER NOT NULL,
+            team_number INTEGER NOT NULL, PRIMARY KEY(match_id, player_id)
+        );
         CREATE TABLE IF NOT EXISTS game_servers (
             server_id TEXT PRIMARY KEY, name TEXT NOT NULL, host TEXT NOT NULL,
             port INTEGER NOT NULL, mode TEXT NOT NULL, region TEXT NOT NULL,
