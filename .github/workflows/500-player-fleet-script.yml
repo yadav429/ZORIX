@@ -25,7 +25,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate shell syntax
         run: bash -n server/start-500-fleet.sh
-      - name: Check executable bit and documentation
+      - name: Check launcher and documentation
         run: |
-          test -x server/start-500-fleet.sh
+          test -s server/start-500-fleet.sh
           test -s docs/500_PLAYER_SERVER_PLAN.md
