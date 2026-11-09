@@ -17,6 +17,7 @@ var bomb_position := Vector3.ZERO
 var bomb_visual: MeshInstance3D
 var match_finished := false
 var match_started := false
+var match_elapsed: float = 0.0
 
 func _ready():
     var config = ConfigFile.new()
@@ -64,6 +65,9 @@ func _process(delta: float):
         if safe_zone_tick >= 1.0:
             safe_zone_tick = 0.0
             _damage_players_outside_zone()
+
+    if match_started:
+        match_elapsed += delta
 
     if not match_finished:
         if tactical_mode:
@@ -208,7 +212,12 @@ func _evaluate_battle_royale_result():
         team_size = clampi(int(config.get_value("game", "team_size", 4)), 1, 4)
     if players.size() < team_size + 1:
         return
-    match_started = true
+    if not match_started:
+        match_started = true
+        match_elapsed = 0.0
+        return
+    if match_elapsed < 60.0:
+        return
     var living_teams: Array[int] = []
     for player in players:
         if not is_instance_valid(player) or player.is_dead:
