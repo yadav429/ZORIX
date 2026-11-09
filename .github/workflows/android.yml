@@ -31,11 +31,31 @@ jobs:
         run: |
           sdkmanager --install "platform-tools" "platforms;android-35" "build-tools;35.0.1" "ndk;28.1.13356709" "cmake;3.10.2.4988404"
 
-      - name: Setup Godot 4.7
-        uses: solarlabyrinth/action-setup-godot@v3
-        with:
-          version: 4.7-stable
-          export-templates: true
+      # Download Godot directly with retries. The previous composite action used
+      # wget without retries and failed before the project was imported.
+      - name: Setup Godot 4.7 with retrying downloads
+        run: |
+          set -euo pipefail
+          GODOT_VERSION="4.7-stable"
+          GODOT_DIR="$HOME/.local/share/godot-ci"
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/4.7.stable"
+          mkdir -p "$GODOT_DIR" "$TEMPLATE_DIR"
+
+          curl --fail --location --retry 5 --retry-all-errors --retry-delay 5 \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip" \
+            --output "$GODOT_DIR/godot.zip"
+          unzip -q "$GODOT_DIR/godot.zip" -d "$GODOT_DIR"
+          mv "$GODOT_DIR/Godot_v${GODOT_VERSION}_linux.x86_64" "$GODOT_DIR/godot"
+          chmod +x "$GODOT_DIR/godot"
+          echo "$GODOT_DIR" >> "$GITHUB_PATH"
+
+          curl --fail --location --retry 5 --retry-all-errors --retry-delay 5 \
+            "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_export_templates.tpz" \
+            --output "$GODOT_DIR/export_templates.tpz"
+          mkdir -p "$GODOT_DIR/templates"
+          unzip -q "$GODOT_DIR/export_templates.tpz" -d "$GODOT_DIR/templates"
+          cp -a "$GODOT_DIR/templates/templates/." "$TEMPLATE_DIR/"
+          godot --version
 
       - name: Configure Godot Android paths
         run: |
@@ -55,8 +75,14 @@ jobs:
           mkdir -p build
           godot --headless --path . --export-debug "Android" build/ZORIX.apk
 
+      - name: Verify APK
+        run: |
+          test -s build/ZORIX.apk
+          ls -lh build/ZORIX.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ZORIX-Android-APK
           path: build/ZORIX.apk
+          if-no-files-found: error
