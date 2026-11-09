@@ -192,8 +192,7 @@ func _setup_player_networking():
     player_spawner.spawn_function = Callable(self, "_spawn_network_player")
     add_child(player_spawner)
     multiplayer.peer_connected.connect(_on_network_peer_connected)
-    if multiplayer.is_server():
-        player_spawner.spawn({"peer_id": multiplayer.get_unique_id(), "spawn_position": Vector3(0, 0, 25)})
+    # The selected game mode creates its local player at the correct spawn point.
 
 func _ready():
     rng.seed = 842771
@@ -349,8 +348,10 @@ func _ready():
     add_child(world_env)
 
     # PLAYER
-    var player = get_node_or_null("Player_%d" % multiplayer.get_unique_id())
-    if player == null:
+    var player = null
+    if multiplayer.is_server():
+        player = player_spawner.spawn({"peer_id": multiplayer.get_unique_id(), "spawn_position": Vector3(0, 0, 25)})
+    else:
         player = get_tree().get_first_node_in_group("local_player")
 
     # Server owns AI simulation; remote clients receive the player entities.
