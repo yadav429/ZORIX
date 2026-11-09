@@ -78,16 +78,19 @@ func _create_safe_zone_ring():
     mat.emission = Color(0.05, 0.45, 0.9)
     mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     safe_zone_ring.material_override = mat
+    var ring = TorusMesh.new()
+    ring.inner_radius = 0.97
+    ring.outer_radius = 1.03
+    ring.rings = 48
+    ring.ring_segments = 6
+    safe_zone_ring.mesh = ring
     add_child(safe_zone_ring)
     _update_safe_zone_ring()
 
 func _update_safe_zone_ring():
-    var ring = TorusMesh.new()
-    ring.inner_radius = maxf(0.1, safe_zone_radius - 0.22)
-    ring.outer_radius = safe_zone_radius + 0.22
-    ring.rings = 48
-    ring.ring_segments = 6
-    safe_zone_ring.mesh = ring
+    # Reuse one torus mesh; only scale it as the zone shrinks.
+    # Rebuilding a mesh every frame caused avoidable allocations and frame spikes.
+    safe_zone_ring.scale = Vector3(safe_zone_radius, 1.0, safe_zone_radius)
     safe_zone_ring.position = Vector3(0, 0.12, 0)
 
 func _damage_players_outside_zone():
