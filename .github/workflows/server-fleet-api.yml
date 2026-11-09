@@ -2,9 +2,9 @@ name: ZORIX Server Fleet API Tests
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, feature/pr14-battle-royale-social-progression]
   push:
-    branches: [main]
+    branches: [main, feature/pr16-server-fleet-allocator]
   workflow_dispatch:
 
 permissions:
