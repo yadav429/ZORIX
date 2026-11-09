@@ -1,0 +1,40 @@
+name: ZORIX Server Fleet API Tests
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  server-fleet-api:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install API and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r auth/requirements.txt httpx
+
+      - name: Compile API modules
+        run: python -m compileall -q auth
+
+      - name: Test server registration, 50-player allocation and ticket replay protection
+        env:
+          ZORIX_AUTH_DB: /tmp/zorix-fleet-ci.sqlite3
+          ZORIX_JWT_SECRET: ci-jwt-secret-that-is-at-least-32-bytes
+          ZORIX_SERVER_SECRET: ci-server-secret-that-is-at-least-32-bytes
+          ZORIX_JOIN_TICKET_SECRET: ci-join-ticket-secret-that-is-32-bytes
+        run: python -m unittest auth.test_server_fleet -v
