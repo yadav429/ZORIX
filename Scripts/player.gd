@@ -22,6 +22,20 @@ func _ready():
     add_to_group("player")
     floor_snap_length = 0.3
 
+    var sync = MultiplayerSynchronizer.new()
+    sync.name = "NetworkSync"
+    sync.root_path = NodePath("..")
+    var replication = SceneReplicationConfig.new()
+    replication.add_property(NodePath(".:position"))
+    replication.add_property(NodePath(".:rotation"))
+    sync.replication_config = replication
+    sync.set_multiplayer_authority(get_multiplayer_authority())
+    add_child(sync)
+
+    if not is_multiplayer_authority():
+        return
+
+    add_to_group("local_player")
     camera_pivot = Node3D.new()
     camera_pivot.name = "CameraPivot"
     camera_pivot.position = Vector3(0, 1.65, 0)
@@ -203,6 +217,9 @@ func shoot():
     # Visual effects temporarily disabled for freeze testing
 
 func _physics_process(delta):
+
+    if not is_multiplayer_authority():
+        return
 
     shoot_timer = maxf(0.0, shoot_timer - delta)
     camera_pivot.global_position = global_position + Vector3(0, 1.65, 0)
