@@ -142,7 +142,7 @@ func _build_lobby():
     join_button.pressed.connect(_join_room)
     content.add_child(join_button)
 
-    var local_button = _make_button("PLAY SELECTED MODE OFFLINE", Color("#354454"))
+    var local_button = _make_button("PLAY OFFLINE TRAINING", Color("#354454"))
     local_button.pressed.connect(_play_offline)
     content.add_child(local_button)
 
@@ -234,7 +234,8 @@ func _host_room():
         info_label.text = "Room could not start: " + error_string(error) + ". Try another network or port."
         return
     multiplayer.multiplayer_peer = peer
-    info_label.text = "ROOM HOSTED on UDP port " + str(DEFAULT_PORT) + ". Share your public IP with friends. Waiting for players..."
+    info_label.text = "ROOM HOSTED. Loading online battlefield..."
+    _start_online_match()
 
 func _join_room():
     var host = address_input.text.strip_edges()
@@ -263,7 +264,13 @@ func _on_peer_disconnected(_id: int):
     info_label.text = "Player left. Current players: " + str(multiplayer.get_peers().size() + 1) + " / " + str(MAX_PLAYERS)
 
 func _on_connected():
-    info_label.text = "Connected to room! Waiting for match start."
+    info_label.text = "Connected! Loading online battlefield..."
+    _start_online_match()
+
+func _start_online_match():
+    var result = get_tree().change_scene_to_file(MATCH_SCENE)
+    if result != OK:
+        info_label.text = "Could not load online match scene: " + error_string(result)
 
 func _on_connection_failed():
     multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
