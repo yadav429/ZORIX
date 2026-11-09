@@ -15,6 +15,9 @@ var bomb_timer: float = 0.0
 var defuse_progress: float = 0.0
 var bomb_position := Vector3.ZERO
 var bomb_visual: MeshInstance3D
+var match_finished := false
+var match_started := false
+var match_elapsed: float = 0.0
 
 func _ready():
     var config = ConfigFile.new()
@@ -62,6 +65,19 @@ func _process(delta: float):
         if safe_zone_tick >= 1.0:
             safe_zone_tick = 0.0
             _damage_players_outside_zone()
+
+    if match_started:
+        match_elapsed += delta
+
+    if not match_finished:
+        if tactical_mode:
+            _evaluate_tactical_elimination_result()
+            if bomb_defused:
+                _finish_match(1, "BOMB DEFUSED")
+            elif bomb_exploded:
+                _finish_match(0, "BOMB EXPLODED")
+        else:
+            _evaluate_battle_royale_result()
 
     if tactical_mode and bomb_planted and not bomb_defused and not bomb_exploded:
         bomb_timer = maxf(0.0, bomb_timer - delta)
@@ -117,11 +133,12 @@ func _spawn_loot():
         push_warning("ZORIX: MultiplayerSpawner unavailable; loot not spawned.")
         return
     for index in range(points.size()):
-        var kind = "medkit" if index % 4 == 0 else "ammo"
+        var kind = "medkit" if index % 4 == 0 else ("weapon" if index % 5 == 0 else "ammo")
         spawner.spawn({
             "entity_type": "loot",
             "pickup_kind": kind,
             "amount": 50 if kind == "ammo" else 35,
+            "weapon_index": 1 + (index % 3),
             "loot_id": index,
             "spawn_position": points[index]
         })
@@ -162,7 +179,7 @@ func _server_tactical_action(peer_id: int):
     if player == null or player.is_dead:
         return
 
-    var is_attacker = (peer_id % 2) == 1
+    var is_attacker = player.team_id == 0
     if not bomb_planted:
         if not is_attacker:
             return
@@ -185,3 +202,96 @@ func _server_tactical_action(peer_id: int):
             bomb_timer = 0.0
             bomb_visual.visible = false
             print("ZORIX: BOMB DEFUSED - DEFENDERS WIN")
+
+
+func _evaluate_battle_royale_result():
+    var players := get_tree().get_nodes_in_group("player")
+    var config := ConfigFile.new()
+    var team_size := 4
+    if config.load("user://zorix_settings.cfg") == OK:
+        team_size = clampi(int(config.get_value("game", "team_size", 4)), 1, 4)
+    if players.size() < team_size + 1:
+        return
+    if not match_started:
+        match_started = true
+        match_elapsed = 0.0
+        return
+    if match_elapsed < 60.0:
+        return
+    var living_teams: Array[int] = []
+    for player in players:
+        if not is_instance_valid(player) or player.is_dead:
+            continue
+        var team := int(player.team_id)
+        if team < 0:
+            team = int(player.get_multiplayer_authority())
+        if not living_teams.has(team):
+            living_teams.append(team)
+    if living_teams.size() <= 1:
+        _finish_match(living_teams[0] if not living_teams.is_empty() else -1, "LAST TEAM STANDING")
+
+func _finish_match(winner_team_id: int, reason: String):
+    if match_finished or not multiplayer.is_server():
+        return
+    match_finished = true
+    print("ZORIX MATCH RESULT | winner_team=%d | reason=%s" % [winner_team_id, reason])
+    show_match_result.rpc(winner_team_id, reason)
+
+@rpc("authority", "call_local", "reliable")
+func show_match_result(winner_team_id: int, reason: String):
+    var layer := CanvasLayer.new()
+    layer.name = "MatchResultOverlay"
+    layer.layer = 30
+    var shade := ColorRect.new()
+    shade.color = Color(0.015, 0.035, 0.055, 0.88)
+    shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    layer.add_child(shade)
+    var panel := PanelContainer.new()
+    panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+    panel.position = Vector2(-190, -125)
+    panel.size = Vector2(380, 250)
+    var style := StyleBoxFlat.new()
+    style.bg_color = Color("#102b38")
+    style.border_color = Color("#53d6c1")
+    style.set_border_width_all(3)
+    style.set_corner_radius_all(18)
+    panel.add_theme_stylebox_override("panel", style)
+    var column := VBoxContainer.new()
+    column.alignment = BoxContainer.ALIGNMENT_CENTER
+    panel.add_child(column)
+    var heading := Label.new()
+    heading.text = "MATCH COMPLETE"
+    heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    heading.add_theme_font_size_override("font_size", 27)
+    heading.add_theme_color_override("font_color", Color("#ffe08a"))
+    column.add_child(heading)
+    var result := Label.new()
+    var local_player = get_tree().get_first_node_in_group("local_player")
+    var local_team := int(local_player.team_id) if local_player != null else -99
+    result.text = "VICTORY" if winner_team_id == local_team else ("DRAW" if winner_team_id < 0 else "DEFEAT")
+    result.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    result.add_theme_font_size_override("font_size", 34)
+    result.add_theme_color_override("font_color", Color("#ffffff"))
+    column.add_child(result)
+    var details := Label.new()
+    details.text = "%s\\nTeam %d\\nKills: %d  |  Deaths: %d" % [reason, winner_team_id, int(local_player.kills) if local_player != null else 0, int(local_player.deaths) if local_player != null else 0]
+    details.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    details.add_theme_font_size_override("font_size", 16)
+    column.add_child(details)
+    get_tree().current_scene.add_child(layer)
+    layer.add_child(panel)
+
+
+func _evaluate_tactical_elimination_result():
+    var players := get_tree().get_nodes_in_group("player")
+    if players.size() < 10:
+        return
+    var living_teams: Array[int] = []
+    for player in players:
+        if not is_instance_valid(player) or player.is_dead:
+            continue
+        var team := int(player.team_id)
+        if not living_teams.has(team):
+            living_teams.append(team)
+    if living_teams.size() <= 1:
+        _finish_match(living_teams[0] if not living_teams.is_empty() else -1, "TEAM ELIMINATION")

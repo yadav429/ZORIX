@@ -15,6 +15,7 @@ var mode_picker: OptionButton
 var graphics_quality := "balanced"
 var fps_limit := 60
 var selected_mode := "Squad"
+var selected_team_size := 4
 var selected_game_mode := "battle_royale"
 var player_account: Node
 
@@ -53,6 +54,7 @@ func _start_dedicated_server():
 
     var config := ConfigFile.new()
     config.set_value("game", "mode", mode)
+    config.set_value("game", "team_size", clampi(_server_argument("--team-size=", "4").to_int(), 1, 5))
     config.save(SETTINGS_PATH)
 
     var peer := ENetMultiplayerPeer.new()
@@ -79,6 +81,7 @@ func _load_settings():
             graphics_quality = "balanced"
         fps_limit = clampi(int(config.get_value("graphics", "fps_limit", 60)), 30, 90)
         selected_game_mode = str(config.get_value("game", "mode", "battle_royale"))
+        selected_team_size = clampi(int(config.get_value("game", "team_size", 4)), 1, 4)
 
 func _save_settings():
     var config = ConfigFile.new()
@@ -86,6 +89,7 @@ func _save_settings():
     config.set_value("graphics", "performance", graphics_quality == "low")
     config.set_value("graphics", "fps_limit", fps_limit)
     config.set_value("game", "mode", selected_game_mode)
+    config.set_value("game", "team_size", [1, 2, 4][clampi(mode_picker.selected if mode_picker != null else 2, 0, 2)])
     config.save(SETTINGS_PATH)
     _apply_frame_limit()
 
@@ -180,7 +184,8 @@ func _build_lobby():
     mode_picker.add_item("SOLO  •  1 PLAYER PER TEAM")
     mode_picker.add_item("DUO  •  2 PLAYERS PER TEAM")
     mode_picker.add_item("SQUAD  •  4 PLAYERS PER TEAM")
-    mode_picker.select(2)
+    mode_picker.select([1, 2, 4].find(selected_team_size))
+    selected_mode = ["Solo", "Duo", "Squad"][mode_picker.selected]
     mode_picker.item_selected.connect(_on_mode_selected)
     mode_picker.custom_minimum_size.y = 48
     content.add_child(mode_picker)
@@ -303,6 +308,7 @@ func _update_mode_status():
 
 func _on_mode_selected(index: int):
     selected_mode = ["Solo", "Duo", "Squad"][index]
+    _save_settings()
     if selected_game_mode == "battle_royale":
         info_label.text = selected_mode + " selected. Match capacity remains 50 players."
 

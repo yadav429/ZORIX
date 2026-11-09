@@ -32,7 +32,7 @@ func _ready():
     target = get_tree().get_first_node_in_group("player")
     print("ZORIX ENEMY SPAWNED: 100 HP")
 
-func take_damage(amount: int):
+func take_damage(amount: int, _attacker_peer_id: int = 0):
     health = max(0, health - amount)
     print("ENEMY HP: ", health)
 

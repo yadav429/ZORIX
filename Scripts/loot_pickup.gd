@@ -1,7 +1,8 @@
 extends Area3D
 
-@export_enum("ammo", "medkit") var pickup_kind: String = "ammo"
+@export_enum("ammo", "medkit", "weapon") var pickup_kind: String = "ammo"
 @export var amount: int = 30
+@export var weapon_index: int = 1
 
 func _ready():
     collision_layer = 0
@@ -23,6 +24,10 @@ func _ready():
         mat.albedo_color = Color("#35d879")
         mat.emission_enabled = true
         mat.emission = Color("#145c32")
+    elif pickup_kind == "weapon":
+        mat.albedo_color = Color("#5aa9ff")
+        mat.emission_enabled = true
+        mat.emission = Color("#174a91")
     else:
         mat.albedo_color = Color("#e5b33b")
         mat.emission_enabled = true
@@ -44,6 +49,8 @@ func _on_body_entered(body: Node3D):
         collected = body.heal(amount)
     elif pickup_kind == "ammo" and body.has_method("add_ammo"):
         collected = body.add_ammo(amount)
+    elif pickup_kind == "weapon" and body.has_method("add_weapon"):
+        collected = body.add_weapon(weapon_index)
 
     if collected:
         queue_free()
