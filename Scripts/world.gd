@@ -69,8 +69,114 @@ func add_building(x: float, z: float, h: float, concrete: Material, glass: Mater
         add_box(self, Vector3(x, float(y), z - 3.56),
             Vector3(5.0, 1.0, 0.12), glass)
 
+
+func _build_tactical_mode():
+    var floor_mat = material(Color("#343b3d"), 0.15, 0.85)
+    var wall_mat = material(Color("#77766d"), 0.05, 0.9)
+    var cover_mat = material(Color("#8b6847"), 0.0, 0.95)
+    var blue_mat = material(Color("#1c456d"))
+    var red_mat = material(Color("#762e2e"))
+    var site_mat = material(Color("#d7b34d"), 0.1, 0.45)
+
+    add_box(self, Vector3(0, -0.55, 0), Vector3(112, 1, 92), floor_mat)
+    add_box(self, Vector3(0, 3, -46), Vector3(112, 6, 2), wall_mat)
+    add_box(self, Vector3(0, 3, 46), Vector3(112, 6, 2), wall_mat)
+    add_box(self, Vector3(-56, 3, 0), Vector3(2, 6, 92), wall_mat)
+    add_box(self, Vector3(56, 3, 0), Vector3(2, 6, 92), wall_mat)
+
+    for x in [-34.0, -17.0, 17.0, 34.0]:
+        add_box(self, Vector3(x, 1.4, -10), Vector3(7, 2.8, 3), cover_mat)
+        add_box(self, Vector3(x, 1.4, 12), Vector3(7, 2.8, 3), cover_mat)
+    add_box(self, Vector3(-7, 1.8, 0), Vector3(5, 3.6, 10), wall_mat)
+    add_box(self, Vector3(7, 1.8, 0), Vector3(5, 3.6, 10), wall_mat)
+    add_box(self, Vector3(0, 1.2, -25), Vector3(14, 2.4, 5), cover_mat)
+    add_box(self, Vector3(0, 1.2, 25), Vector3(14, 2.4, 5), cover_mat)
+
+    add_box(self, Vector3(-34, 0.08, -28), Vector3(12, 0.12, 12), site_mat)
+    add_box(self, Vector3(34, 0.08, 28), Vector3(12, 0.12, 12), site_mat)
+    var site_a = Label3D.new()
+    site_a.text = "SITE A"
+    site_a.position = Vector3(-34, 3.2, -28)
+    site_a.font_size = 48
+    site_a.modulate = Color("#ffe28a")
+    add_child(site_a)
+    var site_b = Label3D.new()
+    site_b.text = "SITE B"
+    site_b.position = Vector3(34, 3.2, 28)
+    site_b.font_size = 48
+    site_b.modulate = Color("#ffe28a")
+    add_child(site_b)
+
+    add_box(self, Vector3(0, 0.08, 36), Vector3(28, 0.12, 5), blue_mat)
+    add_box(self, Vector3(0, 0.08, -36), Vector3(28, 0.12, 5), red_mat)
+
+    var sun = DirectionalLight3D.new()
+    sun.rotation_degrees = Vector3(-52, -30, 0)
+    sun.light_energy = 1.15
+    sun.shadow_enabled = true
+    sun.directional_shadow_max_distance = 55.0
+    add_child(sun)
+
+    var sky = Sky.new()
+    var sky_mat = ProceduralSkyMaterial.new()
+    sky_mat.sky_top_color = Color("#1b3655")
+    sky_mat.sky_horizon_color = Color("#a0a9ad")
+    sky.sky_material = sky_mat
+    var env = Environment.new()
+    env.background_mode = Environment.BG_SKY
+    env.sky = sky
+    env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
+    env.ambient_light_energy = 0.75
+    var world_env = WorldEnvironment.new()
+    world_env.environment = env
+    add_child(world_env)
+
+    var player = PLAYER.instantiate()
+    player.position = Vector3(0, 0, 35)
+    add_child(player)
+
+    var enemy_positions = [
+        Vector3(-5, 0, -34), Vector3(5, 0, -34),
+        Vector3(-15, 0, -30), Vector3(15, 0, -30),
+        Vector3(0, 0, -38)
+    ]
+    for enemy_pos in enemy_positions:
+        var enemy = ENEMY.new()
+        enemy.position = enemy_pos
+        enemy.move_speed = 2.4
+        add_child(enemy)
+
+    for squad_index in range(4):
+        var squad = FRIENDLY.new()
+        squad.name = "BlueTeam_%d" % (squad_index + 1)
+        squad.follow_offset = Vector3(-3.0 if squad_index % 2 == 0 else 3.0, 0, 4.0 + float(squad_index / 2) * 2.5)
+        squad.position = player.position + squad.follow_offset
+        add_child(squad)
+
+    var hud = CanvasLayer.new()
+    var banner = Label.new()
+    banner.text = "ZORIX TACTICAL 5v5  •  BLUE vs RED  •  SITES A / B"
+    banner.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+    banner.offset_top = 10
+    banner.offset_bottom = 48
+    banner.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    banner.add_theme_font_size_override("font_size", 17)
+    banner.add_theme_color_override("font_color", Color("#ffe28a"))
+    hud.add_child(banner)
+    add_child(hud)
+
+    var ui = CanvasLayer.new()
+    ui.set_script(MOBILE_UI)
+    add_child(ui)
+
 func _ready():
     rng.randomize()
+
+    var mode_config = ConfigFile.new()
+    if mode_config.load("user://zorix_settings.cfg") == OK:
+        if str(mode_config.get_value("game", "mode", "battle_royale")) == "tactical_5v5":
+            _build_tactical_mode()
+            return
 
     var grass = material(Color(0.16, 0.34, 0.13))
     var dark_grass = material(Color(0.07, 0.22, 0.09))
@@ -87,7 +193,7 @@ func _ready():
 
     # OCEAN
     add_box(self, Vector3(0, -2.0, 0),
-        Vector3(480, 1, 480), ocean)
+        Vector3(600, 1, 600), ocean)
 
     # INDIA BATTLEFIELD: expanded 18% for a larger playable island.
     var india = CSGPolygon3D.new()
@@ -106,7 +212,7 @@ func _ready():
     india.depth = 1.0
     india.mode = CSGPolygon3D.MODE_DEPTH
     india.rotation_degrees.x = 90
-    india.scale = Vector3(1.18, 1.18, 1.0)
+    india.scale = Vector3(1.42, 1.42, 1.0)
     india.position = Vector3(0, -0.55, 0)
     india.material = grass
     india.use_collision = true
@@ -141,14 +247,14 @@ func _ready():
             Vector3(3, 3, 3), sand)
 
     # HIMALAYA: taller, low-poly cone mountains with snow caps.
-    for i in range(11):
-        var x = -23.0 + float(i) * 4.6
+    for i in range(15):
+        var x = -31.0 + float(i) * 4.4
         var h = rng.randf_range(17.0, 29.0)
         add_mountain(x, 49.0, h, mountain)
         add_mountain(x, 49.0, h * 0.34, snow)
 
     # FOREST AREA: modest object count for mobile performance.
-    for i in range(38):
+    for i in range(52):
         var x = rng.randf_range(-27.0, 28.0)
         var z = rng.randf_range(-49.0, 36.0)
         if abs(x) > 12.0 and abs(z) > 8.0:
@@ -165,7 +271,7 @@ func _ready():
         Vector3(5, 0.5, 5), military)
 
     # EXTRA ROCKS
-    for i in range(14):
+    for i in range(20):
         var rock = SphereMesh.new()
         var obj = MeshInstance3D.new()
         obj.mesh = rock
