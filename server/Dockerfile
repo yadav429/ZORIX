@@ -5,7 +5,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY build/zorix-server.x86_64 /app/zorix-server
+ARG SERVER_BINARY=build/zorix-server.x86_64
+COPY ${SERVER_BINARY} /app/zorix-server
 COPY server/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/zorix-server /app/entrypoint.sh
 
