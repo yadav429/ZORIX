@@ -25,7 +25,7 @@ var weapon_inventory: Array[int] = [0]
 var weapon_ammo: Array[int] = [30, 36, 8, 5]
 var current_weapon_index: int = 0
 var downed_by_peer_id: int = 0
-var revive_target: Node = null
+var revive_target = null
 var revive_progress: float = 0.0
 var weapon_switch_cooldown: float = 0.0
 const WEAPON_DATA := [
@@ -72,6 +72,7 @@ func _ready():
     health_replication.add_property(NodePath(".:reserve_ammo"))
     health_replication.add_property(NodePath(".:is_dead"))
     health_replication.add_property(NodePath(".:is_downed"))
+    health_replication.add_property(NodePath(".:downed_timer"))
     health_replication.add_property(NodePath(".:team_id"))
     health_replication.add_property(NodePath(".:kills"))
     health_replication.add_property(NodePath(".:deaths"))
@@ -315,7 +316,7 @@ func request_revive_nearby():
 func _server_revive_nearby(reviver_peer_id: int):
     if is_dead or is_downed or revive_target != null:
         return
-    var closest: Node = null
+    var closest = null
     var closest_distance := 3.2
     for candidate in get_tree().get_nodes_in_group("player"):
         if candidate == self or not candidate.is_downed or candidate.is_dead or candidate.team_id != team_id:
@@ -417,7 +418,7 @@ func _final_elimination(attacker_peer_id: int = 0):
     collision_layer = 0
     collision_mask = 0
     if attacker_peer_id > 0:
-        var attacker := get_parent().get_node_or_null("Player_%d" % attacker_peer_id)
+        var attacker = get_parent().get_node_or_null("Player_%d" % attacker_peer_id)
         if attacker != null and attacker != self:
             attacker.kills += 1
     print("ZORIX PLAYER ELIMINATED: ", name)
@@ -506,7 +507,7 @@ func _physics_process(delta):
         else:
             revive_progress += delta
             if revive_progress >= 4.0:
-                revive_target._begin_revive(get_multiplayer_authority())
+                revive_target.call("_begin_revive", get_multiplayer_authority())
                 revive_target = null
                 revive_progress = 0.0
 
