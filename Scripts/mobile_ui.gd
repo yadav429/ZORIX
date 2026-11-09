@@ -1,5 +1,36 @@
 extends CanvasLayer
 
+class MinimapVisual extends Control:
+    var player: Node3D
+    var refresh_timer := 0.0
+    func _process(delta: float):
+        refresh_timer += delta
+        if refresh_timer >= 0.2:
+            refresh_timer = 0.0
+            queue_redraw()
+    func _draw():
+        var center := size / 2.0
+        draw_circle(center, 67.0, Color(0.025, 0.07, 0.09, 0.82))
+        draw_arc(center, 67.0, 0.0, TAU, 64, Color(0.55, 0.85, 0.88, 0.9), 2.0)
+        draw_line(Vector2(center.x - 60, center.y), Vector2(center.x + 60, center.y), Color(0.45, 0.65, 0.68, 0.25), 1.0)
+        draw_line(Vector2(center.x, center.y - 60), Vector2(center.x, center.y + 60), Color(0.45, 0.65, 0.68, 0.25), 1.0)
+        if player == null or not is_instance_valid(player):
+            return
+        var rules := get_tree().get_first_node_in_group("match_rules")
+        if rules != null and not rules.tactical_mode:
+            var zone_center := center + Vector2(-player.global_position.x, player.global_position.z) * 0.72
+            var zone_radius := clampf(float(rules.safe_zone_radius) * 0.72, 5.0, 65.0)
+            draw_arc(zone_center, zone_radius, 0.0, TAU, 64, Color(0.25, 0.8, 1.0, 0.9), 2.0)
+        for other in get_tree().get_nodes_in_group("player"):
+            if not is_instance_valid(other) or other.is_dead:
+                continue
+            var offset := Vector2(other.global_position.x - player.global_position.x, -(other.global_position.z - player.global_position.z)) * 0.72
+            if offset.length() > 61.0:
+                continue
+            var dot_color := Color("#ffe06a") if other == player else (Color("#42d9a0") if other.team_id == player.team_id else Color("#ff6666"))
+            draw_circle(center + offset, 4.5 if other == player else 3.5, dot_color)
+        draw_colored_polygon(PackedVector2Array([center + Vector2(0, -9), center + Vector2(-5, 6), center + Vector2(5, 6)]), Color.WHITE)
+
 class JoystickVisual extends Control:
     var value := Vector2.ZERO
 
@@ -15,6 +46,9 @@ var joystick: JoystickVisual
 var jump_button: Button
 var fire_button: Button
 var interact_button: Button
+var weapon_button: Button
+var revive_button: Button
+var minimap: MinimapVisual
 var hint_label: Label
 var status_label: Label
 var fps_label: Label
@@ -74,6 +108,27 @@ func _ready():
     interact_button.add_theme_font_size_override("font_size", 16)
     root.add_child(interact_button)
 
+    weapon_button = Button.new()
+    weapon_button.text = "WEAPON"
+    weapon_button.custom_minimum_size = Vector2(112, 58)
+    weapon_button.size = Vector2(112, 58)
+    weapon_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    weapon_button.add_theme_font_size_override("font_size", 15)
+    root.add_child(weapon_button)
+
+    revive_button = Button.new()
+    revive_button.text = "REVIVE"
+    revive_button.custom_minimum_size = Vector2(112, 58)
+    revive_button.size = Vector2(112, 58)
+    revive_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    revive_button.add_theme_font_size_override("font_size", 15)
+    root.add_child(revive_button)
+
+    minimap = MinimapVisual.new()
+    minimap.size = Vector2(140, 140)
+    minimap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    root.add_child(minimap)
+
     fps_label = Label.new()
     fps_label.text = "FPS --"
     fps_label.position = Vector2(18, 44)
@@ -107,6 +162,9 @@ func update_size():
     jump_button.position = Vector2(screen_size.x - 135, screen_size.y - 115)
     fire_button.position = Vector2(screen_size.x - 155, screen_size.y - 235)
     interact_button.position = Vector2(screen_size.x - 285, screen_size.y - 112)
+    weapon_button.position = Vector2(screen_size.x - 290, screen_size.y - 235)
+    revive_button.position = Vector2(screen_size.x - 410, screen_size.y - 112)
+    minimap.position = Vector2(screen_size.x - 155, 70)
     hint_label.position = Vector2(screen_size.x - 180, screen_size.y - 180)
 
 func get_player():
@@ -160,6 +218,16 @@ func _input(event):
             if interact_id == -1 and interact_button.get_global_rect().has_point(event.position):
                 interact_id = event.index
                 _interact()
+                get_viewport().set_input_as_handled()
+                return
+
+            if weapon_button.get_global_rect().has_point(event.position):
+                _switch_weapon()
+                get_viewport().set_input_as_handled()
+                return
+
+            if revive_button.get_global_rect().has_point(event.position):
+                _revive()
                 get_viewport().set_input_as_handled()
                 return
 
@@ -227,6 +295,18 @@ func _fire():
         else:
             p.shoot()
 
+func _switch_weapon():
+    var p = get_player()
+    if p != null:
+        p.switch_weapon(1)
+        hint_label.text = "WEAPON: " + str(p.get_weapon_data().name)
+
+func _revive():
+    var p = get_player()
+    if p != null:
+        p.try_revive_nearby()
+        hint_label.text = "REVIVE REQUEST SENT"
+
 func _interact():
     var rules = get_tree().get_first_node_in_group("match_rules")
     if rules != null and rules.has_method("interact"):
@@ -245,11 +325,19 @@ func _process(delta):
     if firing and p != null and not p.is_dead:
         p.shoot()
     if p != null and status_label != null:
-        var status = "HP %d  |  AMMO %d/%d" % [p.health, p.ammo, p.reserve_ammo]
-        if p.is_dead:
+        var weapon_data: Dictionary = p.get_weapon_data()
+        var status = "HP %d  |  %s %d/%d" % [p.health, str(weapon_data.name), p.ammo, p.reserve_ammo]
+        if p.is_downed:
+            status += "  |  DOWNED %.0fs" % p.downed_timer
+        elif p.is_dead:
             status += "  |  ELIMINATED"
+        if weapon_button != null:
+            weapon_button.text = str(weapon_data.name)
         var rules = get_tree().get_first_node_in_group("match_rules")
         if rules != null:
+            if minimap != null:
+                minimap.visible = not rules.tactical_mode
+                minimap.player = p
             if rules.tactical_mode:
                 if rules.bomb_planted and not rules.bomb_defused and not rules.bomb_exploded:
                     status += "  |  BOMB %.0f s" % rules.bomb_timer
