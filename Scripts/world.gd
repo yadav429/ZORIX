@@ -140,7 +140,7 @@ func _build_tactical_mode():
     add_child(match_rules)
 
     var player = null
-    if multiplayer.is_server():
+    if multiplayer.is_server() and not _is_dedicated_server():
         player = player_spawner.spawn({"peer_id": multiplayer.get_unique_id(), "spawn_position": Vector3(0, 0, 35)})
 
         var enemy_positions = [
@@ -200,8 +200,23 @@ func _spawn_network_player(data: Variant) -> Node:
 func _on_network_peer_connected(peer_id: int):
     if not multiplayer.is_server() or player_spawner == null:
         return
+    if get_tree().get_nodes_in_group("player").size() >= 50:
+        multiplayer.multiplayer_peer.disconnect_peer(peer_id)
+        return
     var spawn_position := Vector3(float((peer_id % 5) - 2) * 3.0, 0, 25.0 + float(peer_id % 3) * 3.0)
     player_spawner.spawn({"peer_id": peer_id, "spawn_position": spawn_position})
+    print("ZORIX PLAYER JOINED | peer=%d | count=%d/50" % [peer_id, get_tree().get_nodes_in_group("player").size()])
+
+func _on_network_peer_disconnected(peer_id: int):
+    if not multiplayer.is_server():
+        return
+    var player := get_node_or_null("Player_%d" % peer_id)
+    if player != null:
+        player.queue_free()
+    print("ZORIX PLAYER LEFT | peer=%d" % peer_id)
+
+func _is_dedicated_server() -> bool:
+    return OS.has_feature("dedicated_server") or OS.get_cmdline_user_args().has("--server")
 
 func _setup_player_networking():
     player_spawner = MultiplayerSpawner.new()
@@ -210,7 +225,8 @@ func _setup_player_networking():
     player_spawner.spawn_function = Callable(self, "_spawn_network_player")
     add_child(player_spawner)
     multiplayer.peer_connected.connect(_on_network_peer_connected)
-    # The selected game mode creates its local player at the correct spawn point.
+    multiplayer.peer_disconnected.connect(_on_network_peer_disconnected)
+    # Client-host creates its own player; dedicated server waits for remote clients.
 
 func _ready():
     rng.seed = 842771
@@ -373,7 +389,7 @@ func _ready():
 
     # PLAYER
     var player = null
-    if multiplayer.is_server():
+    if multiplayer.is_server() and not _is_dedicated_server():
         player = player_spawner.spawn({"peer_id": multiplayer.get_unique_id(), "spawn_position": Vector3(0, 0, 25)})
     else:
         player = get_tree().get_first_node_in_group("local_player")

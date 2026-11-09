@@ -1,0 +1,41 @@
+name: ZORIX Dedicated Server
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-server:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Godot 4.7
+        uses: solarlabyrinth/action-setup-godot@v3
+        with:
+          version: 4.7-stable
+          export-templates: true
+
+      - name: Import project
+        run: godot --headless --editor --path . --quit
+
+      - name: Export Linux dedicated server
+        run: |
+          mkdir -p build
+          godot --headless --path . --export-release "Linux Server" build/zorix-server.x86_64
+          chmod +x build/zorix-server.x86_64
+          file build/zorix-server.x86_64
+
+      - name: Upload dedicated server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZORIX-Linux-Dedicated-Server
+          path: build/zorix-server.x86_64
+          if-no-files-found: error

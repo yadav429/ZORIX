@@ -15,13 +15,56 @@ var selected_mode := "Squad"
 var selected_game_mode := "battle_royale"
 
 func _ready():
-    _load_settings()
-    _build_lobby()
     multiplayer.peer_connected.connect(_on_peer_connected)
     multiplayer.peer_disconnected.connect(_on_peer_disconnected)
     multiplayer.connected_to_server.connect(_on_connected)
     multiplayer.connection_failed.connect(_on_connection_failed)
     multiplayer.server_disconnected.connect(_on_server_disconnected)
+
+    if _is_dedicated_server():
+        _start_dedicated_server()
+        return
+
+    _load_settings()
+    _build_lobby()
+
+func _is_dedicated_server() -> bool:
+    return OS.has_feature("dedicated_server") or OS.get_cmdline_user_args().has("--server")
+
+func _server_argument(prefix: String, fallback: String) -> String:
+    for argument in OS.get_cmdline_user_args():
+        if argument.begins_with(prefix):
+            return argument.trim_prefix(prefix)
+    return fallback
+
+func _start_dedicated_server():
+    var port := clampi(_server_argument("--port=", "24560").to_int(), 1, 65535)
+    var max_players := clampi(_server_argument("--max-players=", "50").to_int(), 2, 50)
+    var mode := _server_argument("--mode=", "battle_royale")
+    if mode != "tactical_5v5":
+        mode = "battle_royale"
+    if mode == "tactical_5v5":
+        max_players = mini(max_players, 10)
+
+    var config := ConfigFile.new()
+    config.set_value("game", "mode", mode)
+    config.save(SETTINGS_PATH)
+
+    var peer := ENetMultiplayerPeer.new()
+    var error := peer.create_server(port, max_players)
+    if error != OK:
+        push_error("ZORIX dedicated server failed to bind UDP %d: %s" % [port, error_string(error)])
+        get_tree().quit(1)
+        return
+
+    multiplayer.multiplayer_peer = peer
+    Engine.physics_ticks_per_second = 30
+    print("ZORIX DEDICATED SERVER READY | port=%d | capacity=%d | mode=%s" % [port, max_players, mode])
+
+    var result := get_tree().change_scene_to_file(MATCH_SCENE)
+    if result != OK:
+        push_error("ZORIX dedicated server could not load match scene: " + error_string(result))
+        get_tree().quit(1)
 
 func _load_settings():
     var config = ConfigFile.new()
