@@ -3,6 +3,8 @@ services:
     build:
       context: ..
       dockerfile: server/Dockerfile
+      args:
+        SERVER_BINARY: ${SERVER_BINARY:-build/zorix-server.x86_64}
     restart: unless-stopped
     environment:
       PORT: ${PORT:-24560}
