@@ -65,7 +65,7 @@ func _process(delta: float):
             safe_zone_tick = 0.0
             _damage_players_outside_zone()
 
-    if not match_finished and (tactical_mode or match_started):
+    if not match_finished:
         if tactical_mode:
             if bomb_defused:
                 _finish_match(1, "BOMB DEFUSED")
