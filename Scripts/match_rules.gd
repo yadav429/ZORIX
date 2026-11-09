@@ -256,7 +256,7 @@ func show_match_result(winner_team_id: int, reason: String):
     heading.add_theme_color_override("font_color", Color("#ffe08a"))
     column.add_child(heading)
     var result := Label.new()
-    var local_player := get_tree().get_first_node_in_group("local_player")
+    var local_player = get_tree().get_first_node_in_group("local_player")
     var local_team := int(local_player.team_id) if local_player != null else -99
     result.text = "VICTORY" if winner_team_id == local_team else ("DRAW" if winner_team_id < 0 else "DEFEAT")
     result.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
