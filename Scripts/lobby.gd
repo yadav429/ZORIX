@@ -86,6 +86,7 @@ func _save_settings():
     config.set_value("graphics", "performance", graphics_quality == "low")
     config.set_value("graphics", "fps_limit", fps_limit)
     config.set_value("game", "mode", selected_game_mode)
+    config.set_value("game", "team_size", [1, 2, 4][clampi(mode_picker.selected if mode_picker != null else 2, 0, 2)])
     config.save(SETTINGS_PATH)
     _apply_frame_limit()
 
@@ -303,6 +304,7 @@ func _update_mode_status():
 
 func _on_mode_selected(index: int):
     selected_mode = ["Solo", "Duo", "Squad"][index]
+    _save_settings()
     if selected_game_mode == "battle_royale":
         info_label.text = selected_mode + " selected. Match capacity remains 50 players."
 
