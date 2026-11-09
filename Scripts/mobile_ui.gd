@@ -16,7 +16,7 @@ class MinimapVisual extends Control:
         draw_line(Vector2(center.x, center.y - 60), Vector2(center.x, center.y + 60), Color(0.45, 0.65, 0.68, 0.25), 1.0)
         if player == null or not is_instance_valid(player):
             return
-        var rules := get_tree().get_first_node_in_group("match_rules")
+        var rules = get_tree().get_first_node_in_group("match_rules")
         if rules != null and not rules.tactical_mode:
             var zone_center := center + Vector2(-player.global_position.x, player.global_position.z) * 0.72
             var zone_radius := clampf(float(rules.safe_zone_radius) * 0.72, 5.0, 65.0)
@@ -63,6 +63,7 @@ var interact_id := -1
 
 var joystick_value := Vector2.ZERO
 var screen_size := Vector2.ZERO
+var last_weapon_visual_index := -1
 
 const JOYSTICK_RADIUS := 65.0
 
@@ -322,6 +323,9 @@ func _process(delta):
         if fps_label != null:
             fps_label.text = "FPS %d" % Engine.get_frames_per_second()
     var p = get_player()
+    if p != null and p.current_weapon_index != last_weapon_visual_index:
+        last_weapon_visual_index = p.current_weapon_index
+        p.refresh_gun_model()
     if firing and p != null and not p.is_dead:
         p.shoot()
     if p != null and status_label != null:
