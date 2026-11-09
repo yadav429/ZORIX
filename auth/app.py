@@ -130,3 +130,10 @@ try:
 except ImportError:
     from game_features import install_game_feature_routes
 install_game_feature_routes(app, db, current_player)
+
+# Dedicated server registry, allocator and signed join-ticket validation.
+try:
+    from .server_fleet import install_server_fleet_routes
+except ImportError:
+    from server_fleet import install_server_fleet_routes
+install_server_fleet_routes(app, db, current_player)
