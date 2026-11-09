@@ -12,6 +12,10 @@ extends CharacterBody3D
 var mobile_input := Vector2.ZERO
 var is_sprinting := false
 var shoot_timer := 0.0
+var health: int = 100
+var ammo: int = 30
+var reserve_ammo: int = 120
+var is_dead: bool = false
 
 var camera_pivot: Node3D
 var spring_arm: SpringArm3D
@@ -28,6 +32,10 @@ func _ready():
     var replication = SceneReplicationConfig.new()
     replication.add_property(NodePath(".:position"))
     replication.add_property(NodePath(".:rotation"))
+    replication.add_property(NodePath(".:health"))
+    replication.add_property(NodePath(".:ammo"))
+    replication.add_property(NodePath(".:reserve_ammo"))
+    replication.add_property(NodePath(".:is_dead"))
     sync.replication_config = replication
     sync.set_multiplayer_authority(get_multiplayer_authority())
     add_child(sync)
@@ -175,50 +183,77 @@ func create_muzzle_flash():
     remove_effect(flash, 0.20)
 
 func shoot():
-    print("ZORIX SHOOT EXECUTED")
-    if shoot_timer > 0.0:
+    if shoot_timer > 0.0 or is_dead:
         return
-
     if camera == null:
-        print("ZORIX ERROR: CAMERA IS NULL")
         return
-
     shoot_timer = shoot_cooldown
-
-    var origin = camera.global_position
     var direction = -camera.global_transform.basis.z
-    var target = origin + direction * bullet_range
+    if multiplayer.is_server():
+        _server_fire(direction)
+    else:
+        request_shot.rpc_id(1, direction)
 
-    var query = PhysicsRayQueryParameters3D.create(
-        origin, target
-    )
+@rpc("any_peer", "call_remote", "reliable")
+func request_shot(direction: Vector3):
+    if not multiplayer.is_server():
+        return
+    var sender_id = multiplayer.get_remote_sender_id()
+    if sender_id != get_multiplayer_authority():
+        return
+    _server_fire(direction)
+
+func _server_fire(direction: Vector3):
+    if not multiplayer.is_server() or is_dead or ammo <= 0:
+        return
+    ammo -= 1
+    var origin = global_position + Vector3(0, 1.5, 0)
+    var target = origin + direction.normalized() * bullet_range
+    var query = PhysicsRayQueryParameters3D.create(origin, target)
     query.exclude = [get_rid()]
     query.collision_mask = 1
-
     var hit = get_world_3d().direct_space_state.intersect_ray(query)
-
-    var end_point = target
-
     if hit:
-        end_point = hit.position
         var object = hit.collider
-
-        print("ZORIX HIT: ", object.name)
-
-        if object.has_method("take_damage"):
+        if object != null and not object.has_method("take_damage") and object.get_parent() != null:
+            object = object.get_parent()
+        if object != null and object.has_method("take_damage"):
             object.take_damage(25)
-    else:
-        print("ZORIX BULLET FIRED")
 
-    var muzzle = gun_node.to_global(
-        Vector3(0, 0.015, -0.73)
-    )
+func take_damage(amount: int):
+    if not multiplayer.is_server() or is_dead:
+        return
+    health = maxi(0, health - maxi(0, amount))
+    if health == 0:
+        is_dead = true
+        velocity = Vector3.ZERO
+        collision_layer = 0
+        collision_mask = 0
+        print("ZORIX PLAYER ELIMINATED: ", name)
 
-    # Visual effects temporarily disabled for freeze testing
+func heal(amount: int) -> bool:
+    if not multiplayer.is_server() or is_dead or health >= 100:
+        return false
+    health = mini(100, health + maxi(0, amount))
+    return true
+
+func add_ammo(amount: int) -> bool:
+    if not multiplayer.is_server() or reserve_ammo >= 240:
+        return false
+    reserve_ammo = mini(240, reserve_ammo + maxi(0, amount))
+    return true
+
+func reload_weapon():
+    if not multiplayer.is_server() or is_dead or ammo >= 30 or reserve_ammo <= 0:
+        return
+    var needed = 30 - ammo
+    var loaded = mini(needed, reserve_ammo)
+    ammo += loaded
+    reserve_ammo -= loaded
 
 func _physics_process(delta):
 
-    if not is_multiplayer_authority():
+    if not is_multiplayer_authority() or is_dead:
         return
 
     shoot_timer = maxf(0.0, shoot_timer - delta)
