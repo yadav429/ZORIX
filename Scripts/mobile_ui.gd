@@ -51,6 +51,7 @@ var revive_button: Button
 var minimap: MinimapVisual
 var hint_label: Label
 var status_label: Label
+var inventory_label: Label
 var fps_label: Label
 var fps_refresh := 0.0
 
@@ -142,6 +143,13 @@ func _ready():
     status_label.add_theme_font_size_override("font_size", 17)
     status_label.add_theme_color_override("font_color", Color.WHITE)
     root.add_child(status_label)
+
+    inventory_label = Label.new()
+    inventory_label.text = "GUNS: RIFLE"
+    inventory_label.position = Vector2(18, 66)
+    inventory_label.add_theme_font_size_override("font_size", 12)
+    inventory_label.add_theme_color_override("font_color", Color("#ffe08a"))
+    root.add_child(inventory_label)
 
     hint_label = Label.new()
     hint_label.text = "SWIPE TO LOOK"
@@ -332,7 +340,9 @@ func _process(delta):
         elif p.is_dead:
             status += "  |  ELIMINATED"
         if weapon_button != null:
-            weapon_button.text = str(weapon_data.name)
+            weapon_button.text = "SWITCH"
+        if inventory_label != null:
+            inventory_label.text = "GUNS: " + p.get_weapon_inventory_text()
         var rules = get_tree().get_first_node_in_group("match_rules")
         if rules != null:
             if minimap != null:
