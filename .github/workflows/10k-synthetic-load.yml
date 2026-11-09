@@ -1,0 +1,79 @@
+name: ZORIX 10K Synthetic Player Load Test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "loadtest/locustfile_10k.py"
+      - ".github/workflows/10k-synthetic-load.yml"
+      - "auth/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  synthetic-10k:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            auth/requirements.txt
+            loadtest/requirements.txt
+
+      - name: Install API and load-test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r auth/requirements.txt -r loadtest/requirements.txt
+
+      - name: Start isolated local API
+        env:
+          ZORIX_JWT_SECRET: ci-only-secret-for-synthetic-load-testing-2026
+          ZORIX_AUTH_DB: /tmp/zorix-10k-loadtest.sqlite3
+        run: |
+          uvicorn auth.app:app --host 127.0.0.1 --port 8080 > /tmp/zorix-api-10k.log 2>&1 &
+          echo $! > /tmp/zorix-api-10k.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/api/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/zorix-api-10k.log
+          exit 1
+
+      - name: Run 10,000 synthetic concurrent sessions
+        env:
+          ZORIX_JWT_SECRET: ci-only-secret-for-synthetic-load-testing-2026
+        run: |
+          python -m locust -f loadtest/locustfile_10k.py \
+            --host http://127.0.0.1:8080 \
+            --users 10000 \
+            --spawn-rate 200 \
+            --run-time 90s \
+            --stop-timeout 10 \
+            --headless \
+            --html loadtest-10k-report.html \
+            --csv loadtest-10k
+
+      - name: Show API log if test fails
+        if: failure()
+        run: cat /tmp/zorix-api-10k.log || true
+
+      - name: Upload 10K load-test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zorix-10k-synthetic-load-report
+          path: |
+            loadtest-10k-report.html
+            loadtest-10k_*.csv
+          if-no-files-found: ignore
