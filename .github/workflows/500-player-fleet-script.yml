@@ -1,0 +1,31 @@
+name: ZORIX 500-player fleet launcher validation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "server/start-500-fleet.sh"
+      - "docs/500_PLAYER_SERVER_PLAN.md"
+      - ".github/workflows/500-player-fleet-script.yml"
+  push:
+    branches: [main]
+    paths:
+      - "server/start-500-fleet.sh"
+      - "docs/500_PLAYER_SERVER_PLAN.md"
+      - ".github/workflows/500-player-fleet-script.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shell-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate shell syntax
+        run: bash -n server/start-500-fleet.sh
+      - name: Check executable bit and documentation
+        run: |
+          test -x server/start-500-fleet.sh
+          test -s docs/500_PLAYER_SERVER_PLAN.md
