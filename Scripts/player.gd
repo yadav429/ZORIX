@@ -16,6 +16,7 @@ var health: int = 100
 var ammo: int = 30
 var reserve_ammo: int = 120
 var is_dead: bool = false
+var last_server_shot_msec: int = 0
 
 var camera_pivot: Node3D
 var spring_arm: SpringArm3D
@@ -32,13 +33,21 @@ func _ready():
     var replication = SceneReplicationConfig.new()
     replication.add_property(NodePath(".:position"))
     replication.add_property(NodePath(".:rotation"))
-    replication.add_property(NodePath(".:health"))
-    replication.add_property(NodePath(".:ammo"))
-    replication.add_property(NodePath(".:reserve_ammo"))
-    replication.add_property(NodePath(".:is_dead"))
     sync.replication_config = replication
     sync.set_multiplayer_authority(get_multiplayer_authority())
     add_child(sync)
+
+    var health_sync = MultiplayerSynchronizer.new()
+    health_sync.name = "HealthSync"
+    health_sync.root_path = NodePath("..")
+    var health_replication = SceneReplicationConfig.new()
+    health_replication.add_property(NodePath(".:health"))
+    health_replication.add_property(NodePath(".:ammo"))
+    health_replication.add_property(NodePath(".:reserve_ammo"))
+    health_replication.add_property(NodePath(".:is_dead"))
+    health_sync.replication_config = health_replication
+    health_sync.set_multiplayer_authority(1)
+    add_child(health_sync)
 
     if not is_multiplayer_authority():
         return
@@ -206,6 +215,10 @@ func request_shot(direction: Vector3):
 func _server_fire(direction: Vector3):
     if not multiplayer.is_server() or is_dead or ammo <= 0:
         return
+    var now_msec = Time.get_ticks_msec()
+    if last_server_shot_msec > 0 and now_msec - last_server_shot_msec < int(shoot_cooldown * 1000.0):
+        return
+    last_server_shot_msec = now_msec
     ammo -= 1
     var origin = global_position + Vector3(0, 1.5, 0)
     var target = origin + direction.normalized() * bullet_range
@@ -250,6 +263,14 @@ func reload_weapon():
     var loaded = mini(needed, reserve_ammo)
     ammo += loaded
     reserve_ammo -= loaded
+
+@rpc("any_peer", "call_remote", "reliable")
+func request_reload():
+    if not multiplayer.is_server():
+        return
+    if multiplayer.get_remote_sender_id() != get_multiplayer_authority():
+        return
+    reload_weapon()
 
 func _physics_process(delta):
 
