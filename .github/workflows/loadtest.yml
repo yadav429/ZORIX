@@ -1,0 +1,64 @@
+name: ZORIX API Load Test (local CI)
+
+on:
+  push:
+    branches: [feature/automated-load-testing]
+  pull_request:
+    branches: [feature/player-auth-public-lobby, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-api-load-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            auth/requirements.txt
+            loadtest/requirements.txt
+
+      - name: Install API and load-test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r auth/requirements.txt -r loadtest/requirements.txt
+
+      - name: Start local test API
+        env:
+          ZORIX_JWT_SECRET: ci-only-secret-not-for-production-0123456789
+          ZORIX_AUTH_DB: /tmp/zorix-loadtest-ci.sqlite3
+        run: |
+          uvicorn auth.app:app --host 127.0.0.1 --port 8080 > /tmp/zorix-api.log 2>&1 &
+          echo $! > /tmp/zorix-api.pid
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8080/api/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/zorix-api.log
+          exit 1
+
+      - name: Run 10-user synthetic load test
+        run: |
+          python -m locust -f loadtest/locustfile.py \\
+            --host http://127.0.0.1:8080 \\
+            --users 10 --spawn-rate 2 --run-time 30s \\
+            --headless --html loadtest-report.html
+
+      - name: Upload load-test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zorix-api-load-test-report
+          path: loadtest-report.html
+          if-no-files-found: ignore
