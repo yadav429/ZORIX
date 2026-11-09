@@ -227,7 +227,7 @@ func _on_network_peer_connected(peer_id: int):
     if not multiplayer.is_server() or player_spawner == null:
         return
     var match_rules = get_tree().get_first_node_in_group("match_rules")
-    if match_rules != null and match_rules.match_started:
+    if match_rules != null and match_rules.match_started and match_rules.match_elapsed >= 60.0:
         multiplayer.multiplayer_peer.disconnect_peer(peer_id)
         return
     var team_size := _team_size()
