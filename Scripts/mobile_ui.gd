@@ -17,6 +17,8 @@ var fire_button: Button
 var interact_button: Button
 var hint_label: Label
 var status_label: Label
+var fps_label: Label
+var fps_refresh := 0.0
 
 var firing := false
 var joystick_id := -1
@@ -71,6 +73,13 @@ func _ready():
     interact_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
     interact_button.add_theme_font_size_override("font_size", 16)
     root.add_child(interact_button)
+
+    fps_label = Label.new()
+    fps_label.text = "FPS --"
+    fps_label.position = Vector2(18, 44)
+    fps_label.add_theme_font_size_override("font_size", 12)
+    fps_label.add_theme_color_override("font_color", Color("#a9d9e8"))
+    root.add_child(fps_label)
 
     status_label = Label.new()
     status_label.text = "HP 100  |  AMMO 30/120"
@@ -207,7 +216,7 @@ func _jump():
         print("ZORIX JUMP EXECUTED")
 
 func _fire():
-    firing = false
+    firing = true
     var p = get_player()
     if p != null:
         if p.ammo <= 0:
@@ -226,8 +235,15 @@ func _interact():
 func _stop_fire():
     firing = false
 
-func _process(_delta):
+func _process(delta):
+    fps_refresh += delta
+    if fps_refresh >= 0.5:
+        fps_refresh = 0.0
+        if fps_label != null:
+            fps_label.text = "FPS %d" % Engine.get_frames_per_second()
     var p = get_player()
+    if firing and p != null and not p.is_dead:
+        p.shoot()
     if p != null and status_label != null:
         var status = "HP %d  |  AMMO %d/%d" % [p.health, p.ammo, p.reserve_ammo]
         if p.is_dead:
