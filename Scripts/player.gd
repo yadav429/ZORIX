@@ -17,6 +17,12 @@ var ammo: int = 30
 var reserve_ammo: int = 120
 var is_dead: bool = false
 var last_server_shot_msec: int = 0
+var server_move_input := Vector2.ZERO
+var server_sprint := false
+var server_camera_yaw := 0.0
+var jump_pending := false
+var input_send_accumulator := 0.0
+var last_input_msec := 0
 
 var camera_pivot: Node3D
 var spring_arm: SpringArm3D
@@ -34,7 +40,9 @@ func _ready():
     replication.add_property(NodePath(".:position"))
     replication.add_property(NodePath(".:rotation"))
     sync.replication_config = replication
-    sync.set_multiplayer_authority(get_multiplayer_authority())
+    sync.set_multiplayer_authority(1)
+    sync.replication_interval = 0.05
+    sync.delta_interval = 0.05
     add_child(sync)
 
     var health_sync = MultiplayerSynchronizer.new()
@@ -47,6 +55,8 @@ func _ready():
     health_replication.add_property(NodePath(".:is_dead"))
     health_sync.replication_config = health_replication
     health_sync.set_multiplayer_authority(1)
+    health_sync.replication_interval = 0.1
+    health_sync.delta_interval = 0.1
     add_child(health_sync)
 
     if not is_multiplayer_authority():
@@ -117,8 +127,11 @@ func set_sprinting(value: bool):
     is_sprinting = value
 
 func jump():
-    if is_on_floor():
-        velocity.y = jump_force
+    if multiplayer.is_server():
+        if is_on_floor() and not is_dead:
+            velocity.y = jump_force
+    elif is_multiplayer_authority():
+        jump_pending = true
 
 func rotate_camera(horizontal: float, vertical: float):
     camera_pivot.rotation.y -= horizontal * mouse_sensitivity
@@ -272,62 +285,76 @@ func request_reload():
         return
     reload_weapon()
 
-func _physics_process(delta):
-
-    if not is_multiplayer_authority() or is_dead:
+@rpc("any_peer", "call_remote", "unreliable_ordered")
+func submit_movement_input(move_input: Vector2, sprinting: bool, jump_pressed: bool, camera_yaw: float):
+    if not multiplayer.is_server() or is_dead:
         return
+    if multiplayer.get_remote_sender_id() != get_multiplayer_authority():
+        return
+    var now_msec := Time.get_ticks_msec()
+    if last_input_msec > 0 and now_msec - last_input_msec < 20:
+        return
+    last_input_msec = now_msec
+    server_move_input = move_input.limit_length(1.0)
+    server_sprint = sprinting
+    server_camera_yaw = wrapf(camera_yaw, -PI, PI)
+    if jump_pressed and is_on_floor():
+        velocity.y = jump_force
 
-    shoot_timer = maxf(0.0, shoot_timer - delta)
-    camera_pivot.global_position = global_position + Vector3(0, 1.65, 0)
+func _simulate_authoritative_movement(delta: float, input_dir: Vector2, sprinting: bool, camera_yaw: float):
+    if is_dead:
+        velocity = Vector3.ZERO
+        return
 
     if not is_on_floor():
         velocity.y -= gravity * delta
-    elif velocity.y < 0:
-        velocity.y = 0
+    elif velocity.y < 0.0:
+        velocity.y = 0.0
 
-    var keyboard = Input.get_vector(
-        "ui_left", "ui_right", "ui_up", "ui_down"
-    )
-
-    var input_dir = mobile_input if mobile_input.length() > 0.05 else keyboard
-
-    var basis = camera_pivot.global_transform.basis
-    var forward = -basis.z
-    var right = basis.x
-
-    forward.y = 0
-    right.y = 0
-
-    forward = forward.normalized()
-    right = right.normalized()
-
-    var direction = (
-        right * input_dir.x - forward * input_dir.y
-    ).normalized()
+    var basis := Basis(Vector3.UP, camera_yaw)
+    var forward := -basis.z
+    var right := basis.x
+    var direction := (right * input_dir.x - forward * input_dir.y).normalized()
 
     if direction.length() > 0.01:
-        var target_angle = atan2(-direction.x, -direction.z)
-        rotation.y = lerp_angle(
-            rotation.y,
-            target_angle,
-            min(delta * 10.0, 1.0)
-        )
+        var target_angle := atan2(-direction.x, -direction.z)
+        rotation.y = lerp_angle(rotation.y, target_angle, minf(delta * 10.0, 1.0))
 
-    var current_speed = sprint_speed if is_sprinting else speed
-
-    velocity.x = move_toward(
-        velocity.x,
-        direction.x * current_speed,
-        acceleration * delta
-    )
-
-    velocity.z = move_toward(
-        velocity.z,
-        direction.z * current_speed,
-        acceleration * delta
-    )
-
-    if Input.is_action_just_pressed("ui_accept"):
-        jump()
-
+    var current_speed := sprint_speed if sprinting else speed
+    velocity.x = move_toward(velocity.x, direction.x * current_speed, acceleration * delta)
+    velocity.z = move_toward(velocity.z, direction.z * current_speed, acceleration * delta)
     move_and_slide()
+
+func _physics_process(delta):
+    shoot_timer = maxf(0.0, shoot_timer - delta)
+
+    if multiplayer.is_server():
+        var input_dir := server_move_input
+        var sprinting := server_sprint
+        var yaw := server_camera_yaw
+
+        # The listen-server host is peer 1; dedicated servers have no local human player.
+        if get_multiplayer_authority() == 1 and camera_pivot != null:
+            var keyboard := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+            input_dir = mobile_input if mobile_input.length() > 0.05 else keyboard
+            sprinting = is_sprinting
+            yaw = camera_pivot.rotation.y
+            if Input.is_action_just_pressed("ui_accept") and is_on_floor():
+                velocity.y = jump_force
+
+        _simulate_authoritative_movement(delta, input_dir, sprinting, yaw)
+        if get_multiplayer_authority() == 1 and camera_pivot != null:
+            camera_pivot.global_position = global_position + Vector3(0, 1.65, 0)
+        return
+
+    # Clients send input only. The dedicated server owns authoritative movement and transforms.
+    if is_multiplayer_authority():
+        if camera_pivot != null:
+            camera_pivot.global_position = global_position + Vector3(0, 1.65, 0)
+        input_send_accumulator += delta
+        if input_send_accumulator >= 0.05:
+            input_send_accumulator = 0.0
+            var keyboard := Input.get_vector("ui_left", "ui_right", "ui_up", "ui_down")
+            var input_dir := mobile_input if mobile_input.length() > 0.05 else keyboard
+            submit_movement_input.rpc_id(1, input_dir, is_sprinting, jump_pending, camera_pivot.rotation.y if camera_pivot != null else rotation.y)
+            jump_pending = false
