@@ -53,6 +53,7 @@ func _start_dedicated_server():
 
     var config := ConfigFile.new()
     config.set_value("game", "mode", mode)
+    config.set_value("game", "team_size", clampi(_server_argument("--team-size=", "4").to_int(), 1, 5))
     config.save(SETTINGS_PATH)
 
     var peer := ENetMultiplayerPeer.new()
