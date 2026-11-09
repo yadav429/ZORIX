@@ -31,10 +31,6 @@ alter table public.zorix_match_players enable row level security;
 
 -- No direct table access from clients. All queue operations go through RPC.
 revoke all on public.zorix_queue, public.zorix_matches, public.zorix_match_players from anon, authenticated;
-grant execute on function public.zorix_join_queue(text) to authenticated;
-grant execute on function public.zorix_leave_queue() to authenticated;
-grant execute on function public.zorix_queue_status() to authenticated;
-
 create or replace function public.zorix_join_queue(p_mode text)
 returns jsonb
 language plpgsql
