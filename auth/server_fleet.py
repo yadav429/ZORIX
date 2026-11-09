@@ -116,8 +116,11 @@ def install_server_fleet_routes(app, db_factory, current_player):
 
     @router.post("/internal/servers/{server_id}/heartbeat")
     def heartbeat(server_id: str, body: ServerHeartbeat,
-                  x_zorix_server_secret: Optional[str] = Header(default=None)):
+                  x_zorix_server_secret: Optional[str] = Header(default=None),
+                  x_zorix_server_id: Optional[str] = Header(default=None)):
         _server_auth(x_zorix_server_secret)
+        if not x_zorix_server_id or not hmac.compare_digest(server_id, x_zorix_server_id):
+            raise HTTPException(403, "Server ID does not match heartbeat identity")
         con = connection()
         try:
             cur = con.execute("""UPDATE game_servers SET active_players=?,
@@ -229,8 +232,11 @@ def install_server_fleet_routes(app, db_factory, current_player):
             con.close()
 
     @router.post("/internal/join-ticket/consume")
-    def consume_ticket(body: TicketConsume, x_zorix_server_secret: Optional[str] = Header(default=None)):
+    def consume_ticket(body: TicketConsume, x_zorix_server_secret: Optional[str] = Header(default=None),
+                       x_zorix_server_id: Optional[str] = Header(default=None)):
         _server_auth(x_zorix_server_secret)
+        if not x_zorix_server_id:
+            raise HTTPException(403, "Dedicated server ID is required")
         try:
             payload_part, signature = body.ticket.split(".", 1)
             expected = _b64(hmac.new(TICKET_SECRET.encode(), payload_part.encode(), hashlib.sha256).digest())
@@ -253,7 +259,9 @@ def install_server_fleet_routes(app, db_factory, current_player):
                 raise HTTPException(401, "Join ticket already used or revoked")
             assignment = con.execute("SELECT server_id FROM match_server_assignments WHERE match_id=?",
                                      (int(claims["match"]),)).fetchone()
-            if assignment is None or assignment["server_id"] != claims["server"]:
+            if (assignment is None or assignment["server_id"] != claims["server"]
+                    or not hmac.compare_digest(assignment["server_id"], x_zorix_server_id)
+                    or not hmac.compare_digest(claims["server"], x_zorix_server_id)):
                 con.rollback()
                 raise HTTPException(401, "Ticket is not for this game server")
             con.commit()
