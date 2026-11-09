@@ -11,7 +11,8 @@ var graphics_button: Button
 var address_input: LineEdit
 var mode_picker: OptionButton
 var performance_mode := false
-var selected_mode := "Solo"
+var selected_mode := "Squad"
+var selected_game_mode := "battle_royale"
 
 func _ready():
     _load_settings()
@@ -26,10 +27,12 @@ func _load_settings():
     var config = ConfigFile.new()
     if config.load(SETTINGS_PATH) == OK:
         performance_mode = bool(config.get_value("graphics", "performance", false))
+        selected_game_mode = str(config.get_value("game", "mode", "battle_royale"))
 
 func _save_settings():
     var config = ConfigFile.new()
     config.set_value("graphics", "performance", performance_mode)
+    config.set_value("game", "mode", selected_game_mode)
     config.save(SETTINGS_PATH)
 
 func _panel_style(color: Color, border_color: Color) -> StyleBoxFlat:
@@ -80,7 +83,7 @@ func _build_lobby():
     margin.add_child(content)
 
     var eyebrow = Label.new()
-    eyebrow.text = "ONLINE BATTLE ROYALE • UP TO 50 PLAYERS"
+    eyebrow.text = "DUAL COMBAT MODES • MOBILE OPTIMIZED"
     eyebrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     eyebrow.add_theme_font_size_override("font_size", 12)
     eyebrow.add_theme_color_override("font_color", Color("#62d6c6"))
@@ -94,12 +97,21 @@ func _build_lobby():
     content.add_child(title)
 
     var map_title = Label.new()
-    map_title.text = "INDIA BATTLEFIELD"
+    map_title.text = "INDIA BATTLEFIELD • EXPANDED MAP"
     map_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     map_title.add_theme_color_override("font_color", Color("#f0c477"))
     content.add_child(map_title)
 
-    _add_section("1  SELECT GAME MODE")
+    _add_section("1  CHOOSE YOUR GAME")
+    var br_button = _make_button("BATTLE ROYALE  •  50 PLAYERS", Color("#167c70"))
+    br_button.pressed.connect(_select_battle_royale)
+    content.add_child(br_button)
+
+    var tactical_button = _make_button("TACTICAL 5v5  •  BOMB ARENA", Color("#8a4b25"))
+    tactical_button.pressed.connect(_select_tactical)
+    content.add_child(tactical_button)
+
+    _add_section("2  TEAM SIZE • BATTLE ROYALE")
     mode_picker = OptionButton.new()
     mode_picker.add_item("SOLO  •  1 PLAYER PER TEAM")
     mode_picker.add_item("DUO  •  2 PLAYERS PER TEAM")
@@ -110,12 +122,12 @@ func _build_lobby():
     content.add_child(mode_picker)
 
     var capacity = Label.new()
-    capacity.text = "MATCH CAPACITY: 50 PLAYERS MAXIMUM"
+    capacity.text = "BATTLE ROYALE CAPACITY: 50 PLAYERS MAXIMUM"
     capacity.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     capacity.add_theme_color_override("font_color", Color("#b9cbd0"))
     content.add_child(capacity)
 
-    _add_section("2  CREATE OR JOIN ROOM")
+    _add_section("3  CREATE OR JOIN ROOM")
     address_input = LineEdit.new()
     address_input.placeholder_text = "Host IP address (example: 123.45.67.89)"
     address_input.custom_minimum_size.y = 48
@@ -130,7 +142,7 @@ func _build_lobby():
     join_button.pressed.connect(_join_room)
     content.add_child(join_button)
 
-    var local_button = _make_button("PLAY OFFLINE", Color("#354454"))
+    var local_button = _make_button("PLAY SELECTED MODE OFFLINE", Color("#354454"))
     local_button.pressed.connect(_play_offline)
     content.add_child(local_button)
 
@@ -138,20 +150,21 @@ func _build_lobby():
     graphics_button.pressed.connect(_toggle_graphics)
     content.add_child(graphics_button)
     _update_graphics_button()
+    _update_mode_status()
 
     var panel = PanelContainer.new()
     panel.add_theme_stylebox_override("panel", _panel_style(Color("#172b36"), Color("#31505b")))
     content.add_child(panel)
 
     info_label = Label.new()
-    info_label.text = "Select Solo, Duo or Squad. Create a room or enter the host IP to join."
+    info_label.text = "Choose Battle Royale or Tactical 5v5, then play offline or create/join a room."
     info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     info_label.add_theme_color_override("font_color", Color("#d8e5e6"))
     panel.add_child(info_label)
 
     var note = Label.new()
-    note.text = "Internet play requires a reachable game server and an open UDP port 24560. Offline mode works without internet."
+    note.text = "Online room networking is a prototype and needs a reachable game server. Supabase matchmaking setup is separate."
     note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     note.add_theme_font_size_override("font_size", 11)
@@ -191,9 +204,28 @@ func _make_button(caption: String, color: Color) -> Button:
     button.add_theme_stylebox_override("pressed", hover)
     return button
 
+func _select_battle_royale():
+    selected_game_mode = "battle_royale"
+    _save_settings()
+    _update_mode_status()
+
+func _select_tactical():
+    selected_game_mode = "tactical_5v5"
+    _save_settings()
+    _update_mode_status()
+
+func _update_mode_status():
+    if info_label == null:
+        return
+    if selected_game_mode == "tactical_5v5":
+        info_label.text = "TACTICAL 5v5 selected: compact arena, two teams, bomb-site practice."
+    else:
+        info_label.text = "BATTLE ROYALE selected: expanded island, 50-player queue modes and survival practice."
+
 func _on_mode_selected(index: int):
     selected_mode = ["Solo", "Duo", "Squad"][index]
-    info_label.text = selected_mode + " selected. Match capacity remains 50 players."
+    if selected_game_mode == "battle_royale":
+        info_label.text = selected_mode + " selected. Match capacity remains 50 players."
 
 func _host_room():
     var peer = ENetMultiplayerPeer.new()
@@ -218,15 +250,16 @@ func _join_room():
     info_label.text = "Connecting to " + host + ":" + str(DEFAULT_PORT) + "..."
 
 func _play_offline():
+    _save_settings()
     multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
     var result = get_tree().change_scene_to_file(MATCH_SCENE)
     if result != OK:
         info_label.text = "Match scene could not load. Check Scenes/Main.tscn."
 
-func _on_peer_connected(id: int):
+func _on_peer_connected(_id: int):
     info_label.text = "Player connected. Current players: " + str(multiplayer.get_peers().size() + 1) + " / " + str(MAX_PLAYERS)
 
-func _on_peer_disconnected(id: int):
+func _on_peer_disconnected(_id: int):
     info_label.text = "Player left. Current players: " + str(multiplayer.get_peers().size() + 1) + " / " + str(MAX_PLAYERS)
 
 func _on_connected():
@@ -245,9 +278,7 @@ func _update_graphics_button():
 
 func _toggle_graphics():
     performance_mode = not performance_mode
-    var config = ConfigFile.new()
-    config.set_value("graphics", "performance", performance_mode)
-    config.save(SETTINGS_PATH)
+    _save_settings()
     _update_graphics_button()
     info_label.text = "Graphics preference saved."
 
