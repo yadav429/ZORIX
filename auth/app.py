@@ -124,5 +124,9 @@ def lobby(player=Depends(current_player)):
 
 
 # Bundled player social, matchmaking and progression API.
-from game_features import install_game_feature_routes
+# Support both CI/package import (auth.app) and the Docker image's app module.
+try:
+    from .game_features import install_game_feature_routes
+except ImportError:
+    from game_features import install_game_feature_routes
 install_game_feature_routes(app, db, current_player)
