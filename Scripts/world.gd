@@ -131,27 +131,27 @@ func _build_tactical_mode():
     world_env.environment = env
     add_child(world_env)
 
-    var player = PLAYER.instantiate()
-    player.position = Vector3(0, 0, 35)
-    add_child(player)
+    var player = null
+    if multiplayer.is_server():
+        player = player_spawner.spawn({"peer_id": multiplayer.get_unique_id(), "spawn_position": Vector3(0, 0, 35)})
 
-    var enemy_positions = [
-        Vector3(-5, 0, -34), Vector3(5, 0, -34),
-        Vector3(-15, 0, -30), Vector3(15, 0, -30),
-        Vector3(0, 0, -38)
-    ]
-    for enemy_pos in enemy_positions:
-        var enemy = ENEMY.new()
-        enemy.position = enemy_pos
-        enemy.move_speed = 2.4
-        add_child(enemy)
+        var enemy_positions = [
+            Vector3(-5, 0, -34), Vector3(5, 0, -34),
+            Vector3(-15, 0, -30), Vector3(15, 0, -30),
+            Vector3(0, 0, -38)
+        ]
+        for enemy_pos in enemy_positions:
+            var enemy = ENEMY.new()
+            enemy.position = enemy_pos
+            enemy.move_speed = 2.4
+            add_child(enemy)
 
-    for squad_index in range(4):
-        var squad = FRIENDLY.new()
-        squad.name = "BlueTeam_%d" % (squad_index + 1)
-        squad.follow_offset = Vector3(-3.0 if squad_index % 2 == 0 else 3.0, 0, 4.0 + float(squad_index / 2) * 2.5)
-        squad.position = player.position + squad.follow_offset
-        add_child(squad)
+        for squad_index in range(4):
+            var squad = FRIENDLY.new()
+            squad.name = "BlueTeam_%d" % (squad_index + 1)
+            squad.follow_offset = Vector3(-3.0 if squad_index % 2 == 0 else 3.0, 0, 4.0 + float(squad_index / 2) * 2.5)
+            squad.position = player.position + squad.follow_offset
+            add_child(squad)
 
     var hud = CanvasLayer.new()
     var banner = Label.new()
@@ -356,10 +356,10 @@ func _ready():
     # Server owns AI simulation; remote clients receive the player entities.
     if multiplayer.is_server():
         var enemy_positions = [
-        Vector3(0, 0, 7), Vector3(-6, 0, 5),
-        Vector3(6, 0, 5), Vector3(-10, 0, -4),
-        Vector3(10, 0, -4), Vector3(0, 0, -12)
-    ]
+            Vector3(0, 0, 7), Vector3(-6, 0, 5),
+            Vector3(6, 0, 5), Vector3(-10, 0, -4),
+            Vector3(10, 0, -4), Vector3(0, 0, -12)
+        ]
         for enemy_pos in enemy_positions:
             var enemy = ENEMY.new()
             enemy.position = enemy_pos
