@@ -112,11 +112,12 @@ func _build_tactical_mode():
     add_box(self, Vector3(0, 0.08, 36), Vector3(28, 0.12, 5), blue_mat)
     add_box(self, Vector3(0, 0.08, -36), Vector3(28, 0.12, 5), red_mat)
 
+    var quality := _graphics_quality()
     var sun = DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-52, -30, 0)
     sun.light_energy = 1.15
-    sun.shadow_enabled = true
-    sun.directional_shadow_max_distance = 55.0
+    sun.shadow_enabled = quality != "low"
+    sun.directional_shadow_max_distance = 38.0 if quality == "low" else (55.0 if quality == "balanced" else 78.0)
     add_child(sun)
 
     var sky = Sky.new()
