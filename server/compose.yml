@@ -1,0 +1,13 @@
+services:
+  zorix-server:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: ${PORT:-24560}
+      MAX_PLAYERS: ${MAX_PLAYERS:-50}
+      GAME_MODE: ${GAME_MODE:-battle_royale}
+    ports:
+      - "${PORT:-24560}:${PORT:-24560}/udp"
+    init: true
