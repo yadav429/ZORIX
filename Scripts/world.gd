@@ -188,6 +188,7 @@ func _spawn_network_player(data: Variant) -> Node:
         pickup.name = "Loot_%s_%d" % [str(data.get("pickup_kind", "ammo")), int(data.get("loot_id", 0))]
         pickup.pickup_kind = str(data.get("pickup_kind", "ammo"))
         pickup.amount = int(data.get("amount", 30))
+        pickup.weapon_index = int(data.get("weapon_index", 1))
         pickup.position = data.get("spawn_position", Vector3.ZERO)
         return pickup
 
