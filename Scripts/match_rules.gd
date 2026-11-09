@@ -31,6 +31,8 @@ func _ready():
     replication.add_property(NodePath(".:bomb_exploded"))
     replication.add_property(NodePath(".:bomb_timer"))
     replication.add_property(NodePath(".:bomb_position"))
+    replication.add_property(NodePath("BombDevice:visible"))
+    replication.add_property(NodePath("BombDevice:position"))
     sync.replication_config = replication
     add_child(sync)
 
@@ -40,11 +42,13 @@ func _ready():
     else:
         _create_safe_zone_ring()
 
-    if multiplayer.is_server():
+    if multiplayer.is_server() and not tactical_mode:
         _spawn_loot()
 
 func _process(delta: float):
     if not multiplayer.is_server():
+        if not tactical_mode and safe_zone_ring != null:
+            _update_safe_zone_ring()
         return
 
     if not tactical_mode and safe_zone_radius > 8.0:
@@ -113,6 +117,7 @@ func _spawn_loot():
             "entity_type": "loot",
             "pickup_kind": kind,
             "amount": 50 if kind == "ammo" else 35,
+            "loot_id": index,
             "spawn_position": points[index]
         })
 
