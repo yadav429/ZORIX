@@ -223,7 +223,7 @@ func _on_network_peer_connected(peer_id: int):
         return
     var team_id := _next_team_id()
     var team_size := _team_size()
-    var spawn_side := -1.0 if team_size == 5 and team_id == 0 else 1.0
+    var spawn_side := 1.0 if team_size == 5 and team_id == 0 else -1.0
     var spawn_position := Vector3(float((peer_id % 5) - 2) * 3.0, 0, 25.0 * spawn_side + float(peer_id % 3) * 3.0)
     player_spawner.spawn({"peer_id": peer_id, "team_id": team_id, "spawn_position": spawn_position})
     print("ZORIX PLAYER JOINED | peer=%d | count=%d/50" % [peer_id, get_tree().get_nodes_in_group("player").size()])
