@@ -184,7 +184,7 @@ func _spawn_network_player(data: Variant) -> Node:
     if entity_type == "loot":
         var pickup := Area3D.new()
         pickup.set_script(LOOT)
-        pickup.name = "Loot_%s_%d" % [str(data.get("pickup_kind", "ammo")), randi()]
+        pickup.name = "Loot_%s_%d" % [str(data.get("pickup_kind", "ammo")), int(data.get("loot_id", 0))]
         pickup.pickup_kind = str(data.get("pickup_kind", "ammo"))
         pickup.amount = int(data.get("amount", 30))
         pickup.position = data.get("spawn_position", Vector3.ZERO)
@@ -364,6 +364,12 @@ func _ready():
     var world_env = WorldEnvironment.new()
     world_env.environment = env
     add_child(world_env)
+
+    var match_rules = Node3D.new()
+    match_rules.name = "MatchRules"
+    match_rules.add_to_group("match_rules")
+    match_rules.set_script(MATCH_RULES)
+    add_child(match_rules)
 
     # PLAYER
     var player = null
