@@ -26,9 +26,10 @@ class ServerFleetTests(unittest.TestCase):
         self.assertEqual(registered.status_code, 200, registered.text)
         server_id = registered.json()["server_id"]
 
+        server_headers = {**headers, "X-Zorix-Server-Id": server_id}
         heartbeat = client.post(
             f"/api/internal/servers/{server_id}/heartbeat",
-            headers=headers, json={"active_players": 0, "reserved_players": 0}
+            headers=server_headers, json={"active_players": 0, "reserved_players": 0}
         )
         self.assertEqual(heartbeat.status_code, 200, heartbeat.text)
 
@@ -77,9 +78,9 @@ class ServerFleetTests(unittest.TestCase):
         self.assertEqual(status.status_code, 200, status.text)
         ticket = status.json()["join_ticket"]
 
-        consumed = client.post("/api/internal/join-ticket/consume", headers=headers, json={"ticket": ticket})
+        consumed = client.post("/api/internal/join-ticket/consume", headers=server_headers, json={"ticket": ticket})
         self.assertEqual(consumed.status_code, 200, consumed.text)
-        replay = client.post("/api/internal/join-ticket/consume", headers=headers, json={"ticket": ticket})
+        replay = client.post("/api/internal/join-ticket/consume", headers=server_headers, json={"ticket": ticket})
         self.assertEqual(replay.status_code, 401)
 
 
