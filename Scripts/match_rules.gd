@@ -67,6 +67,7 @@ func _process(delta: float):
 
     if not match_finished:
         if tactical_mode:
+            _evaluate_tactical_elimination_result()
             if bomb_defused:
                 _finish_match(1, "BOMB DEFUSED")
             elif bomb_exploded:
@@ -270,3 +271,18 @@ func show_match_result(winner_team_id: int, reason: String):
     column.add_child(details)
     get_tree().current_scene.add_child(layer)
     layer.add_child(panel)
+
+
+func _evaluate_tactical_elimination_result():
+    var players := get_tree().get_nodes_in_group("player")
+    if players.size() < 10:
+        return
+    var living_teams: Array[int] = []
+    for player in players:
+        if not is_instance_valid(player) or player.is_dead:
+            continue
+        var team := int(player.team_id)
+        if not living_teams.has(team):
+            living_teams.append(team)
+    if living_teams.size() <= 1:
+        _finish_match(living_teams[0] if not living_teams.is_empty() else -1, "TEAM ELIMINATION")
