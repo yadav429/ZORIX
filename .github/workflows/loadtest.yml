@@ -4,7 +4,7 @@ on:
   push:
     branches: [feature/automated-load-testing]
   pull_request:
-    branches: [feature/player-auth-public-lobby, main]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -50,10 +50,7 @@ jobs:
 
       - name: Run 10-user synthetic load test
         run: |
-          python -m locust -f loadtest/locustfile.py \\
-            --host http://127.0.0.1:8080 \\
-            --users 10 --spawn-rate 2 --run-time 30s \\
-            --headless --html loadtest-report.html
+          python -m locust -f loadtest/locustfile.py --host http://127.0.0.1:8080 --users 10 --spawn-rate 2 --run-time 30s --headless --html loadtest-report.html
 
       - name: Upload load-test report
         if: always()
