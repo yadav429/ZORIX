@@ -142,7 +142,7 @@ func _build_tactical_mode():
 
     var player = null
     if multiplayer.is_server() and not _is_dedicated_server():
-        player = player_spawner.spawn({"peer_id": multiplayer.get_unique_id(), "spawn_position": Vector3(0, 0, 35)})
+        player = player_spawner.spawn({"peer_id": multiplayer.get_unique_id(), "team_id": 0, "spawn_position": Vector3(0, 0, 35)})
 
         var enemy_positions = [
             Vector3(-5, 0, -34), Vector3(5, 0, -34),
@@ -195,8 +195,24 @@ func _spawn_network_player(data: Variant) -> Node:
     var player := PLAYER.instantiate()
     player.name = "Player_%d" % peer_id
     player.set_multiplayer_authority(peer_id)
+    player.team_id = int(data.get("team_id", peer_id - 1))
     player.position = data.get("spawn_position", Vector3(0, 0, 25))
     return player
+
+func _team_size() -> int:
+    var config := ConfigFile.new()
+    if config.load("user://zorix_settings.cfg") == OK:
+        if str(config.get_value("game", "mode", "battle_royale")) == "tactical_5v5":
+            return 5
+        return clampi(int(config.get_value("game", "team_size", 4)), 1, 4)
+    return 4
+
+func _next_team_id() -> int:
+    var team_size := _team_size()
+    var joined_count := get_tree().get_nodes_in_group("player").size()
+    if team_size == 5:
+        return 0 if joined_count < 5 else 1
+    return int(joined_count / team_size)
 
 func _on_network_peer_connected(peer_id: int):
     if not multiplayer.is_server() or player_spawner == null:
@@ -204,8 +220,11 @@ func _on_network_peer_connected(peer_id: int):
     if get_tree().get_nodes_in_group("player").size() >= 50:
         multiplayer.multiplayer_peer.disconnect_peer(peer_id)
         return
-    var spawn_position := Vector3(float((peer_id % 5) - 2) * 3.0, 0, 25.0 + float(peer_id % 3) * 3.0)
-    player_spawner.spawn({"peer_id": peer_id, "spawn_position": spawn_position})
+    var team_id := _next_team_id()
+    var team_size := _team_size()
+    var spawn_side := -1.0 if team_size == 5 and team_id == 0 else 1.0
+    var spawn_position := Vector3(float((peer_id % 5) - 2) * 3.0, 0, 25.0 * spawn_side + float(peer_id % 3) * 3.0)
+    player_spawner.spawn({"peer_id": peer_id, "team_id": team_id, "spawn_position": spawn_position})
     print("ZORIX PLAYER JOINED | peer=%d | count=%d/50" % [peer_id, get_tree().get_nodes_in_group("player").size()])
 
 func _on_network_peer_disconnected(peer_id: int):
@@ -398,7 +417,7 @@ func _ready():
     # PLAYER
     var player = null
     if multiplayer.is_server() and not _is_dedicated_server():
-        player = player_spawner.spawn({"peer_id": multiplayer.get_unique_id(), "spawn_position": Vector3(0, 0, 25)})
+        player = player_spawner.spawn({"peer_id": multiplayer.get_unique_id(), "team_id": 0, "spawn_position": Vector3(0, 0, 25)})
     else:
         player = get_tree().get_first_node_in_group("local_player")
 
