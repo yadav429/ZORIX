@@ -131,11 +131,21 @@ func _create_bomb_visual():
     bomb_visual.visible = false
     add_child(bomb_visual)
 
+func interact():
+    if not tactical_mode:
+        return
+    if multiplayer.is_server():
+        _server_tactical_action(multiplayer.get_unique_id())
+    else:
+        request_tactical_action.rpc_id(1)
+
 @rpc("any_peer", "call_remote", "reliable")
 func request_tactical_action():
     if not multiplayer.is_server() or not tactical_mode:
         return
-    var peer_id = multiplayer.get_remote_sender_id()
+    _server_tactical_action(multiplayer.get_remote_sender_id())
+
+func _server_tactical_action(peer_id: int):
     if peer_id <= 0:
         return
     var player = get_parent().get_node_or_null("Player_%d" % peer_id)
