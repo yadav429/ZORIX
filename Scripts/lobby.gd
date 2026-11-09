@@ -1,6 +1,7 @@
 extends Control
 
 const MATCH_SCENE := "res://Scenes/Main.tscn"
+const PLAYER_ACCOUNT := preload("res://Scripts/player_account.gd")
 const SETTINGS_PATH := "user://zorix_settings.cfg"
 const DEFAULT_PORT := 24560
 const MAX_PLAYERS := 50
@@ -13,6 +14,7 @@ var mode_picker: OptionButton
 var performance_mode := false
 var selected_mode := "Squad"
 var selected_game_mode := "battle_royale"
+var player_account: Node
 
 func _ready():
     multiplayer.peer_connected.connect(_on_peer_connected)
@@ -145,6 +147,13 @@ func _build_lobby():
     map_title.add_theme_color_override("font_color", Color("#f0c477"))
     content.add_child(map_title)
 
+    player_account = Node.new()
+    player_account.name = "PlayerAccount"
+    player_account.set_script(PLAYER_ACCOUNT)
+    add_child(player_account)
+    player_account.call("build_ui", content)
+    player_account.connect("public_server_loaded", _on_public_server_loaded)
+
     _add_section("1  CHOOSE YOUR GAME")
     var br_button = _make_button("BATTLE ROYALE  •  50 PLAYERS", Color("#167c70"))
     br_button.pressed.connect(_select_battle_royale)
@@ -271,6 +280,9 @@ func _on_mode_selected(index: int):
         info_label.text = selected_mode + " selected. Match capacity remains 50 players."
 
 func _host_room():
+    if player_account == null or not bool(player_account.call("is_logged_in")):
+        info_label.text = "Please register/login before entering online rooms."
+        return
     var peer = ENetMultiplayerPeer.new()
     var error = peer.create_server(DEFAULT_PORT, MAX_PLAYERS - 1)
     if error != OK:
@@ -281,6 +293,9 @@ func _host_room():
     _start_online_match()
 
 func _join_room():
+    if player_account == null or not bool(player_account.call("is_logged_in")):
+        info_label.text = "Please register/login before joining the public lobby."
+        return
     var host = address_input.text.strip_edges()
     if host.is_empty():
         info_label.text = "Enter the host public IP address first."
@@ -292,6 +307,10 @@ func _join_room():
         return
     multiplayer.multiplayer_peer = peer
     info_label.text = "Connecting to " + host + ":" + str(DEFAULT_PORT) + "..."
+
+func _on_public_server_loaded(host: String, port: int):
+    address_input.text = host
+    info_label.text = "Public server found at %s:%d. Tap JOIN ROOM BY IP when it is online." % [host, port]
 
 func _play_offline():
     _save_settings()
