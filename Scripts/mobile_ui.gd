@@ -14,13 +14,16 @@ var player: CharacterBody3D
 var joystick: JoystickVisual
 var jump_button: Button
 var fire_button: Button
+var interact_button: Button
 var hint_label: Label
+var status_label: Label
 
 var firing := false
 var joystick_id := -1
 var camera_id := -1
 var jump_id := -1
 var fire_id := -1
+var interact_id := -1
 
 var joystick_value := Vector2.ZERO
 var screen_size := Vector2.ZERO
@@ -61,6 +64,21 @@ func _ready():
     fire_button.add_theme_color_override("font_pressed_color", Color("#ffccaa"))
     root.add_child(fire_button)
 
+    interact_button = Button.new()
+    interact_button.text = "INTERACT"
+    interact_button.custom_minimum_size = Vector2(112, 66)
+    interact_button.size = Vector2(112, 66)
+    interact_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
+    interact_button.add_theme_font_size_override("font_size", 16)
+    root.add_child(interact_button)
+
+    status_label = Label.new()
+    status_label.text = "HP 100  |  AMMO 30/120"
+    status_label.position = Vector2(18, 18)
+    status_label.add_theme_font_size_override("font_size", 17)
+    status_label.add_theme_color_override("font_color", Color.WHITE)
+    root.add_child(status_label)
+
     hint_label = Label.new()
     hint_label.text = "SWIPE TO LOOK"
     hint_label.add_theme_color_override("font_color", Color.WHITE)
@@ -79,6 +97,7 @@ func update_size():
     joystick.position = Vector2(35, screen_size.y - 195)
     jump_button.position = Vector2(screen_size.x - 135, screen_size.y - 115)
     fire_button.position = Vector2(screen_size.x - 155, screen_size.y - 235)
+    interact_button.position = Vector2(screen_size.x - 285, screen_size.y - 112)
     hint_label.position = Vector2(screen_size.x - 180, screen_size.y - 180)
 
 func get_player():
@@ -128,6 +147,13 @@ func _input(event):
                 get_viewport().set_input_as_handled()
                 return
 
+            # INTERACT TOUCH
+            if interact_id == -1 and interact_button.get_global_rect().has_point(event.position):
+                interact_id = event.index
+                _interact()
+                get_viewport().set_input_as_handled()
+                return
+
             # JOYSTICK TOUCH
             if joystick_id == -1 and event.position.x < screen_size.x * 0.5:
                 joystick_id = event.index
@@ -159,6 +185,9 @@ func _input(event):
             if event.index == camera_id:
                 camera_id = -1
 
+            if event.index == interact_id:
+                interact_id = -1
+
     elif event is InputEventScreenDrag:
 
         if event.index == joystick_id:
@@ -179,14 +208,39 @@ func _jump():
 
 func _fire():
     firing = false
-    print("ZORIX SINGLE FIRE")
-
     var p = get_player()
     if p != null:
-        p.shoot()
+        if p.ammo <= 0:
+            if multiplayer.is_server():
+                p.reload_weapon()
+            else:
+                p.request_reload.rpc_id(1)
+        else:
+            p.shoot()
+
+func _interact():
+    var rules = get_tree().get_first_node_in_group("match_rules")
+    if rules != null and rules.has_method("interact"):
+        rules.interact()
 
 func _stop_fire():
     firing = false
 
 func _process(_delta):
-    pass
+    var p = get_player()
+    if p != null and status_label != null:
+        var status = "HP %d  |  AMMO %d/%d" % [p.health, p.ammo, p.reserve_ammo]
+        if p.is_dead:
+            status += "  |  ELIMINATED"
+        var rules = get_tree().get_first_node_in_group("match_rules")
+        if rules != null:
+            if rules.tactical_mode:
+                if rules.bomb_planted and not rules.bomb_defused and not rules.bomb_exploded:
+                    status += "  |  BOMB %.0f s" % rules.bomb_timer
+                elif rules.bomb_defused:
+                    status += "  |  DEFUSED"
+                elif rules.bomb_exploded:
+                    status += "  |  EXPLODED"
+            else:
+                status += "  |  ZONE %.0f m" % rules.safe_zone_radius
+        status_label.text = status
