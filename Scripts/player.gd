@@ -269,6 +269,12 @@ func create_muzzle_flash():
 func get_weapon_data() -> Dictionary:
     return WEAPON_DATA[clampi(current_weapon_index, 0, WEAPON_DATA.size() - 1)]
 
+func get_weapon_inventory_text() -> String:
+    var names: Array[String] = []
+    for weapon_id in weapon_inventory:
+        names.append(str(WEAPON_DATA[weapon_id].name))
+    return " / ".join(names)
+
 func switch_weapon(direction: int = 1):
     if is_dead or is_downed or weapon_inventory.size() < 2 or weapon_switch_cooldown > 0.0:
         return
