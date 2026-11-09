@@ -284,9 +284,11 @@ func request_switch_weapon(direction: int):
     _server_switch_weapon(direction)
 
 func _server_switch_weapon(direction: int):
-    if weapon_inventory.size() < 2 or is_dead or is_downed:
+    if weapon_inventory.size() < 2 or is_dead or is_downed or weapon_switch_cooldown > 0.0:
         return
     var current_slot := weapon_inventory.find(current_weapon_index)
+    if current_slot < 0:
+        current_slot = 0
     var next_slot := posmod(current_slot + (1 if direction >= 0 else -1), weapon_inventory.size())
     weapon_ammo[current_weapon_index] = ammo
     current_weapon_index = weapon_inventory[next_slot]
