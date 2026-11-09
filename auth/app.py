@@ -81,6 +81,21 @@ def current_player(authorization: Optional[str] = Header(default=None)):
 def health():
     return {"ok": True, "service": "zorix-player-api"}
 
+@app.post("/api/guest")
+def guest_login():
+    username = "Guest_" + secrets.token_hex(5)
+    password = secrets.token_urlsafe(32)
+    salt = secrets.token_bytes(16)
+    con = db()
+    try:
+        cur = con.execute("INSERT INTO players(username,salt,password_hash,created_at) VALUES(?,?,?,?)",
+            (username.lower(), salt.hex(), hash_password(password, salt), int(time.time())))
+        con.commit()
+        player_id = cur.lastrowid
+    finally:
+        con.close()
+    return {"token": issue_token(player_id, username), "player": {"id": player_id, "username": username, "guest": True}}
+
 @app.post("/api/register")
 def register(body: Credentials):
     username = body.username.strip()
