@@ -22,7 +22,11 @@ var team_id: int = -1
 var kills: int = 0
 var deaths: int = 0
 var weapon_inventory: Array[int] = [0]
+var weapon_ammo: Array[int] = [30, 36, 8, 5]
 var current_weapon_index: int = 0
+var downed_by_peer_id: int = 0
+var revive_target: Node = null
+var revive_progress: float = 0.0
 var weapon_switch_cooldown: float = 0.0
 const WEAPON_DATA := [
     {"name": "RIFLE", "damage": 25, "cooldown": 0.18, "range": 150.0, "mag": 30},
@@ -67,11 +71,13 @@ func _ready():
     health_replication.add_property(NodePath(".:ammo"))
     health_replication.add_property(NodePath(".:reserve_ammo"))
     health_replication.add_property(NodePath(".:is_dead"))
-    replication.add_property(NodePath(".:is_downed"))
-    replication.add_property(NodePath(".:team_id"))
-    replication.add_property(NodePath(".:kills"))
-    replication.add_property(NodePath(".:deaths"))
-    replication.add_property(NodePath(".:current_weapon_index"))
+    health_replication.add_property(NodePath(".:is_downed"))
+    health_replication.add_property(NodePath(".:team_id"))
+    health_replication.add_property(NodePath(".:kills"))
+    health_replication.add_property(NodePath(".:deaths"))
+    health_replication.add_property(NodePath(".:current_weapon_index"))
+    health_replication.add_property(NodePath(".:weapon_inventory"))
+    health_replication.add_property(NodePath(".:weapon_ammo"))
     health_sync.replication_config = health_replication
     health_sync.set_multiplayer_authority(1)
     health_sync.replication_interval = 0.1
@@ -104,6 +110,11 @@ func _ready():
 
     create_gun()
 
+func refresh_gun_model():
+    if gun_node != null and is_instance_valid(gun_node):
+        gun_node.queue_free()
+    create_gun()
+
 func create_gun():
     gun_node = Node3D.new()
     gun_node.name = "SoldierGun"
@@ -117,7 +128,7 @@ func create_gun():
 
     var body = MeshInstance3D.new()
     var body_mesh = BoxMesh.new()
-    body_mesh.size = Vector3(0.16, 0.18, 0.65)
+    body_mesh.size = Vector3(0.16, 0.18, 0.65) if current_weapon_index == 0 else (Vector3(0.14, 0.16, 0.48) if current_weapon_index == 1 else (Vector3(0.20, 0.16, 0.42) if current_weapon_index == 2 else Vector3(0.13, 0.17, 0.92)))
     body.mesh = body_mesh
     body.material_override = dark
     gun_node.add_child(body)
@@ -145,6 +156,22 @@ func create_gun():
     grip.position = Vector3(0, -0.19, 0.12)
     grip.material_override = dark
     gun_node.add_child(grip)
+
+    var magazine = MeshInstance3D.new()
+    var magazine_mesh = BoxMesh.new()
+    magazine_mesh.size = Vector3(0.11, 0.25 if current_weapon_index != 2 else 0.19, 0.14)
+    magazine.mesh = magazine_mesh
+    magazine.position = Vector3(0, -0.20, -0.04)
+    magazine.material_override = dark
+    gun_node.add_child(magazine)
+
+    var sight = MeshInstance3D.new()
+    var sight_mesh = BoxMesh.new()
+    sight_mesh.size = Vector3(0.09, 0.10, 0.12)
+    sight.mesh = sight_mesh
+    sight.position = Vector3(0, 0.13, -0.10)
+    sight.material_override = dark
+    gun_node.add_child(sight)
 
 func set_mobile_move(value: Vector2):
     mobile_input = value.limit_length(1.0)
@@ -252,12 +279,15 @@ func _server_switch_weapon(direction: int):
         return
     var current_slot := weapon_inventory.find(current_weapon_index)
     var next_slot := posmod(current_slot + (1 if direction >= 0 else -1), weapon_inventory.size())
+    weapon_ammo[current_weapon_index] = ammo
     current_weapon_index = weapon_inventory[next_slot]
     var stats := get_weapon_data()
-    ammo = mini(ammo, int(stats.mag))
+    ammo = weapon_ammo[current_weapon_index]
     shoot_cooldown = float(stats.cooldown)
     bullet_range = float(stats.range)
     weapon_switch_cooldown = 0.35
+    if gun_node != null and is_instance_valid(gun_node):
+        refresh_gun_model()
     print("ZORIX WEAPON SWITCHED: ", stats.name)
 
 func add_weapon(weapon_id: int) -> bool:
@@ -283,7 +313,7 @@ func request_revive_nearby():
     _server_revive_nearby(get_multiplayer_authority())
 
 func _server_revive_nearby(reviver_peer_id: int):
-    if is_dead or is_downed:
+    if is_dead or is_downed or revive_target != null:
         return
     var closest: Node = null
     var closest_distance := 3.2
@@ -295,7 +325,9 @@ func _server_revive_nearby(reviver_peer_id: int):
             closest = candidate
             closest_distance = distance
     if closest != null:
-        closest._begin_revive(reviver_peer_id)
+        revive_target = closest
+        revive_progress = 0.0
+        print("ZORIX REVIVE STARTED | target=%s | reviver=%d" % [closest.name, reviver_peer_id])
 
 func _begin_revive(reviver_peer_id: int):
     if not multiplayer.is_server() or not is_downed or is_dead:
@@ -303,6 +335,7 @@ func _begin_revive(reviver_peer_id: int):
     health = 40
     is_downed = false
     downed_timer = 0.0
+    downed_by_peer_id = 0
     collision_layer = 1
     collision_mask = 1
     print("ZORIX REVIVED | player=%s | by=%d" % [name, reviver_peer_id])
@@ -336,6 +369,7 @@ func _server_fire(direction: Vector3):
         return
     last_server_shot_msec = now_msec
     ammo -= 1
+    weapon_ammo[current_weapon_index] = ammo
     var origin = global_position + Vector3(0, 1.5, 0)
     var target = origin + direction.normalized() * bullet_range
     var query = PhysicsRayQueryParameters3D.create(origin, target)
@@ -357,6 +391,7 @@ func take_damage(amount: int, attacker_peer_id: int = 0):
         if team_id >= 0 and _has_living_teammate():
             is_downed = true
             downed_timer = 20.0
+            downed_by_peer_id = attacker_peer_id
             health = 1
             velocity = Vector3.ZERO
             print("ZORIX PLAYER DOWNED: ", name)
@@ -370,6 +405,8 @@ func _has_living_teammate() -> bool:
     return false
 
 func _final_elimination(attacker_peer_id: int = 0):
+    if attacker_peer_id <= 0:
+        attacker_peer_id = downed_by_peer_id
     if is_dead:
         return
     is_dead = true
@@ -404,6 +441,7 @@ func reload_weapon():
     var needed = magazine_size - ammo
     var loaded = mini(needed, reserve_ammo)
     ammo += loaded
+    weapon_ammo[current_weapon_index] = ammo
     reserve_ammo -= loaded
 
 @rpc("any_peer", "call_remote", "reliable")
@@ -461,6 +499,16 @@ func _physics_process(delta):
         downed_timer = maxf(0.0, downed_timer - delta)
         if downed_timer <= 0.0:
             _final_elimination()
+    if multiplayer.is_server() and revive_target != null:
+        if not is_instance_valid(revive_target) or not revive_target.is_downed or revive_target.is_dead or is_dead or is_downed or team_id != revive_target.team_id or global_position.distance_to(revive_target.global_position) > 3.2:
+            revive_target = null
+            revive_progress = 0.0
+        else:
+            revive_progress += delta
+            if revive_progress >= 4.0:
+                revive_target._begin_revive(get_multiplayer_authority())
+                revive_target = null
+                revive_progress = 0.0
 
     if multiplayer.is_server():
         var input_dir := server_move_input
