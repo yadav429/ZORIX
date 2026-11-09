@@ -165,17 +165,21 @@ def install_server_fleet_routes(app, db_factory, current_player):
                     all_members = con.execute("SELECT COUNT(*) n FROM team_members WHERE team_id=?", (tid,)).fetchone()["n"]
                     if len(members) == all_members:
                         units.append([int(m["player_id"]) for m in members])
+            capacity = min(body.limit, int(server["max_players"]))
+            # Squad teams contain four players, so a 50-slot server can fill with
+            # 48 players (12 complete squads) rather than splitting a squad.
+            required = capacity - 3 if body.mode == "squad" else capacity
             selected = []
             for unit in units:
-                if len(selected) + len(unit) > min(body.limit, int(server["max_players"])):
+                if len(selected) + len(unit) > capacity:
                     continue
                 selected.extend(unit)
-                if len(selected) == min(body.limit, int(server["max_players"])):
+                if len(selected) >= required:
                     break
-            if len(selected) < min(body.limit, int(server["max_players"])):
+            if len(selected) < required:
                 con.rollback()
                 return {"status": "waiting", "players_ready": len(selected),
-                        "players_required": min(body.limit, int(server["max_players"]))}
+                        "players_required": required, "server_capacity": capacity}
             cur = con.execute("INSERT INTO game_matches(mode,status,created_at) VALUES(?,?,?)",
                               (body.mode, "allocated", now))
             match_id = int(cur.lastrowid)
