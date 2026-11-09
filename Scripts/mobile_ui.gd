@@ -30,7 +30,7 @@ const JOYSTICK_RADIUS := 65.0
 func _ready():
     print("ZORIX MULTITOUCH SYSTEM READY")
 
-    player = get_tree().get_first_node_in_group("player")
+    player = get_tree().get_first_node_in_group("local_player")
     screen_size = get_viewport().get_visible_rect().size
 
     var root = Control.new()
@@ -83,7 +83,7 @@ func update_size():
 
 func get_player():
     if player == null or not is_instance_valid(player):
-        player = get_tree().get_first_node_in_group("player")
+        player = get_tree().get_first_node_in_group("local_player")
     return player
 
 func update_joystick(pos: Vector2):
