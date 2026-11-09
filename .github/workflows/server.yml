@@ -26,16 +26,29 @@ jobs:
       - name: Import project
         run: godot --headless --editor --path . --quit
 
-      - name: Export Linux dedicated server
+      - name: Export Linux x86_64 dedicated server
         run: |
           mkdir -p build
           godot --headless --path . --export-release "Linux Server" build/zorix-server.x86_64
           chmod +x build/zorix-server.x86_64
           file build/zorix-server.x86_64
 
-      - name: Upload dedicated server artifact
+      - name: Export Linux ARM64 dedicated server
+        run: |
+          godot --headless --path . --export-release "Linux ARM64 Server" build/zorix-server.arm64
+          chmod +x build/zorix-server.arm64
+          file build/zorix-server.arm64
+
+      - name: Upload x86_64 server artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ZORIX-Linux-Dedicated-Server
+          name: ZORIX-Linux-x86_64-Server
           path: build/zorix-server.x86_64
+          if-no-files-found: error
+
+      - name: Upload ARM64 server artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZORIX-Linux-ARM64-Server
+          path: build/zorix-server.arm64
           if-no-files-found: error
