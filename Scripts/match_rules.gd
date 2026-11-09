@@ -16,6 +16,7 @@ var defuse_progress: float = 0.0
 var bomb_position := Vector3.ZERO
 var bomb_visual: MeshInstance3D
 var match_finished := false
+var match_started := false
 
 func _ready():
     var config = ConfigFile.new()
@@ -64,7 +65,7 @@ func _process(delta: float):
             safe_zone_tick = 0.0
             _damage_players_outside_zone()
 
-    if not match_finished:
+    if not match_finished and (tactical_mode or match_started):
         if tactical_mode:
             if bomb_defused:
                 _finish_match(1, "BOMB DEFUSED")
@@ -200,8 +201,13 @@ func _server_tactical_action(peer_id: int):
 
 func _evaluate_battle_royale_result():
     var players := get_tree().get_nodes_in_group("player")
-    if players.size() < 2:
+    var config := ConfigFile.new()
+    var team_size := 4
+    if config.load("user://zorix_settings.cfg") == OK:
+        team_size = clampi(int(config.get_value("game", "team_size", 4)), 1, 4)
+    if players.size() < team_size + 1:
         return
+    match_started = true
     var living_teams: Array[int] = []
     for player in players:
         if not is_instance_valid(player) or player.is_dead:
