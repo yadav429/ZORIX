@@ -43,13 +43,15 @@ func _start_dedicated_server():
     var mode := _server_argument("--mode=", "battle_royale")
     if mode != "tactical_5v5":
         mode = "battle_royale"
+    if mode == "tactical_5v5":
+        max_players = mini(max_players, 10)
 
     var config := ConfigFile.new()
     config.set_value("game", "mode", mode)
     config.save(SETTINGS_PATH)
 
     var peer := ENetMultiplayerPeer.new()
-    var error := peer.create_server(port, max_players - 1)
+    var error := peer.create_server(port, max_players)
     if error != OK:
         push_error("ZORIX dedicated server failed to bind UDP %d: %s" % [port, error_string(error)])
         get_tree().quit(1)
