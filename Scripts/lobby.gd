@@ -2,16 +2,25 @@ extends Control
 
 const MATCH_SCENE := "res://Scenes/Main.tscn"
 const SETTINGS_PATH := "user://zorix_settings.cfg"
+const DEFAULT_PORT := 24560
+const MAX_PLAYERS := 50
 
 var content: VBoxContainer
-var info_panel: PanelContainer
 var info_label: Label
 var graphics_button: Button
+var address_input: LineEdit
+var mode_picker: OptionButton
 var performance_mode := false
+var selected_mode := "Solo"
 
 func _ready():
     _load_settings()
     _build_lobby()
+    multiplayer.peer_connected.connect(_on_peer_connected)
+    multiplayer.peer_disconnected.connect(_on_peer_disconnected)
+    multiplayer.connected_to_server.connect(_on_connected)
+    multiplayer.connection_failed.connect(_on_connection_failed)
+    multiplayer.server_disconnected.connect(_on_server_disconnected)
 
 func _load_settings():
     var config = ConfigFile.new()
@@ -29,10 +38,10 @@ func _panel_style(color: Color, border_color: Color) -> StyleBoxFlat:
     style.border_color = border_color
     style.set_border_width_all(2)
     style.set_corner_radius_all(16)
-    style.content_margin_left = 22
-    style.content_margin_right = 22
-    style.content_margin_top = 18
-    style.content_margin_bottom = 18
+    style.content_margin_left = 18
+    style.content_margin_right = 18
+    style.content_margin_top = 16
+    style.content_margin_bottom = 16
     return style
 
 func _build_lobby():
@@ -41,41 +50,37 @@ func _build_lobby():
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     add_child(background)
 
-    var glow = ColorRect.new()
-    glow.color = Color("#102b35")
-    glow.anchor_left = 0.0
-    glow.anchor_top = 0.0
-    glow.anchor_right = 1.0
-    glow.anchor_bottom = 0.42
-    glow.mouse_filter = Control.MOUSE_FILTER_IGNORE
-    background.add_child(glow)
+    var scroll = ScrollContainer.new()
+    scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    scroll.offset_left = 12
+    scroll.offset_top = 12
+    scroll.offset_right = -12
+    scroll.offset_bottom = -12
+    add_child(scroll)
 
     var center = CenterContainer.new()
-    center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    add_child(center)
+    center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    scroll.add_child(center)
 
     var card = PanelContainer.new()
-    card.custom_minimum_size = Vector2(0, 0)
     card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    card.add_theme_stylebox_override(
-        "panel", _panel_style(Color("#101e29"), Color("#2a6871"))
-    )
+    card.add_theme_stylebox_override("panel", _panel_style(Color("#101e29"), Color("#2a6871")))
     center.add_child(card)
 
     var margin = MarginContainer.new()
-    margin.add_theme_constant_override("margin_left", 26)
-    margin.add_theme_constant_override("margin_right", 26)
-    margin.add_theme_constant_override("margin_top", 24)
-    margin.add_theme_constant_override("margin_bottom", 24)
+    margin.add_theme_constant_override("margin_left", 20)
+    margin.add_theme_constant_override("margin_right", 20)
+    margin.add_theme_constant_override("margin_top", 20)
+    margin.add_theme_constant_override("margin_bottom", 20)
     card.add_child(margin)
 
     content = VBoxContainer.new()
-    content.add_theme_constant_override("separation", 13)
+    content.add_theme_constant_override("separation", 11)
     content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     margin.add_child(content)
 
     var eyebrow = Label.new()
-    eyebrow.text = "TACTICAL BATTLEFIELD  •  MOBILE"
+    eyebrow.text = "ONLINE BATTLE ROYALE • UP TO 50 PLAYERS"
     eyebrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     eyebrow.add_theme_font_size_override("font_size", 12)
     eyebrow.add_theme_color_override("font_color", Color("#62d6c6"))
@@ -84,112 +89,168 @@ func _build_lobby():
     var title = Label.new()
     title.text = "Z O R I X"
     title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", 42)
+    title.add_theme_font_size_override("font_size", 40)
     title.add_theme_color_override("font_color", Color("#f3f7f4"))
     content.add_child(title)
 
-    var subtitle = Label.new()
-    subtitle.text = "ENTER THE BATTLEFIELD"
-    subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    subtitle.add_theme_font_size_override("font_size", 14)
-    subtitle.add_theme_color_override("font_color", Color("#a5bbc2"))
-    content.add_child(subtitle)
-
-    var divider = HSeparator.new()
-    content.add_child(divider)
-
     var map_title = Label.new()
-    map_title.text = "INDIA BATTLEFIELD  |  SQUAD MATCH"
+    map_title.text = "INDIA BATTLEFIELD"
     map_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    map_title.add_theme_font_size_override("font_size", 15)
     map_title.add_theme_color_override("font_color", Color("#f0c477"))
     content.add_child(map_title)
 
-    var map_info = Label.new()
-    map_info.text = "6 ENEMY SOLDIERS     •     2 FRIENDLY SQUAD"
-    map_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    map_info.add_theme_font_size_override("font_size", 12)
-    map_info.add_theme_color_override("font_color", Color("#c4d0d2"))
-    content.add_child(map_info)
+    _add_section("1  SELECT GAME MODE")
+    mode_picker = OptionButton.new()
+    mode_picker.add_item("SOLO  •  1 PLAYER PER TEAM")
+    mode_picker.add_item("DUO  •  2 PLAYERS PER TEAM")
+    mode_picker.add_item("SQUAD  •  4 PLAYERS PER TEAM")
+    mode_picker.select(2)
+    mode_picker.item_selected.connect(_on_mode_selected)
+    mode_picker.custom_minimum_size.y = 48
+    content.add_child(mode_picker)
 
-    var start_button = _make_button("START MATCH", Color("#167c70"))
-    start_button.pressed.connect(_start_match)
-    content.add_child(start_button)
+    var capacity = Label.new()
+    capacity.text = "MATCH CAPACITY: 50 PLAYERS MAXIMUM"
+    capacity.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    capacity.add_theme_color_override("font_color", Color("#b9cbd0"))
+    content.add_child(capacity)
 
-    var squad_button = _make_button("SQUAD / TEAM", Color("#254b61"))
-    squad_button.pressed.connect(_show_squad)
-    content.add_child(squad_button)
+    _add_section("2  CREATE OR JOIN ROOM")
+    address_input = LineEdit.new()
+    address_input.placeholder_text = "Host IP address (example: 123.45.67.89)"
+    address_input.custom_minimum_size.y = 48
+    address_input.clear_button_enabled = true
+    content.add_child(address_input)
+
+    var host_button = _make_button("CREATE ROOM (HOST)", Color("#167c70"))
+    host_button.pressed.connect(_host_room)
+    content.add_child(host_button)
+
+    var join_button = _make_button("JOIN ROOM BY IP", Color("#254b61"))
+    join_button.pressed.connect(_join_room)
+    content.add_child(join_button)
+
+    var local_button = _make_button("PLAY OFFLINE", Color("#354454"))
+    local_button.pressed.connect(_play_offline)
+    content.add_child(local_button)
 
     graphics_button = _make_button("", Color("#354454"))
     graphics_button.pressed.connect(_toggle_graphics)
     content.add_child(graphics_button)
     _update_graphics_button()
 
-    info_panel = PanelContainer.new()
-    info_panel.add_theme_stylebox_override(
-        "panel", _panel_style(Color("#172b36"), Color("#31505b"))
-    )
-    content.add_child(info_panel)
+    var panel = PanelContainer.new()
+    panel.add_theme_stylebox_override("panel", _panel_style(Color("#172b36"), Color("#31505b")))
+    content.add_child(panel)
 
     info_label = Label.new()
-    info_label.text = "Choose START MATCH when you are ready."
+    info_label.text = "Select Solo, Duo or Squad. Create a room or enter the host IP to join."
     info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    info_label.add_theme_font_size_override("font_size", 13)
     info_label.add_theme_color_override("font_color", Color("#d8e5e6"))
-    info_panel.add_child(info_label)
+    panel.add_child(info_label)
+
+    var note = Label.new()
+    note.text = "Internet play requires a reachable game server and an open UDP port 24560. Offline mode works without internet."
+    note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    note.add_theme_font_size_override("font_size", 11)
+    note.add_theme_color_override("font_color", Color("#8fa8af"))
+    content.add_child(note)
 
     var footer = Label.new()
-    footer.text = "ZORIX  •  TRAIN • SURVIVE • WIN"
+    footer.text = "ZORIX • TRAIN • SURVIVE • WIN"
     footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     footer.add_theme_font_size_override("font_size", 11)
     footer.add_theme_color_override("font_color", Color("#78949c"))
     content.add_child(footer)
 
+func _add_section(text_value: String):
+    var label = Label.new()
+    label.text = text_value
+    label.add_theme_color_override("font_color", Color("#62d6c6"))
+    label.add_theme_font_size_override("font_size", 14)
+    content.add_child(label)
+
 func _make_button(caption: String, color: Color) -> Button:
     var button = Button.new()
     button.text = caption
-    button.custom_minimum_size = Vector2(0, 54)
+    button.custom_minimum_size = Vector2(0, 50)
     button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    button.add_theme_font_size_override("font_size", 17)
+    button.add_theme_font_size_override("font_size", 15)
     button.add_theme_color_override("font_color", Color.WHITE)
-
     var normal = StyleBoxFlat.new()
     normal.bg_color = color
     normal.set_corner_radius_all(10)
-    normal.content_margin_top = 10
-    normal.content_margin_bottom = 10
+    normal.content_margin_top = 9
+    normal.content_margin_bottom = 9
     button.add_theme_stylebox_override("normal", normal)
-
     var hover = normal.duplicate()
     hover.bg_color = color.lightened(0.12)
     button.add_theme_stylebox_override("hover", hover)
     button.add_theme_stylebox_override("pressed", hover)
     return button
 
-func _update_graphics_button():
-    if performance_mode:
-        graphics_button.text = "GRAPHICS: PERFORMANCE"
-    else:
-        graphics_button.text = "GRAPHICS: BALANCED"
+func _on_mode_selected(index: int):
+    selected_mode = ["Solo", "Duo", "Squad"][index]
+    info_label.text = selected_mode + " selected. Match capacity remains 50 players."
 
-func _start_match():
+func _host_room():
+    var peer = ENetMultiplayerPeer.new()
+    var error = peer.create_server(DEFAULT_PORT, MAX_PLAYERS - 1)
+    if error != OK:
+        info_label.text = "Room could not start: " + error_string(error) + ". Try another network or port."
+        return
+    multiplayer.multiplayer_peer = peer
+    info_label.text = "ROOM HOSTED on UDP port " + str(DEFAULT_PORT) + ". Share your public IP with friends. Waiting for players..."
+
+func _join_room():
+    var host = address_input.text.strip_edges()
+    if host.is_empty():
+        info_label.text = "Enter the host public IP address first."
+        return
+    var peer = ENetMultiplayerPeer.new()
+    var error = peer.create_client(host, DEFAULT_PORT)
+    if error != OK:
+        info_label.text = "Could not connect: " + error_string(error)
+        return
+    multiplayer.multiplayer_peer = peer
+    info_label.text = "Connecting to " + host + ":" + str(DEFAULT_PORT) + "..."
+
+func _play_offline():
+    multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
     var result = get_tree().change_scene_to_file(MATCH_SCENE)
     if result != OK:
-        info_label.text = "Could not load the match scene. Please check the game files."
+        info_label.text = "Match scene could not load. Check Scenes/Main.tscn."
 
-func _show_squad():
-    info_label.text = "YOUR SQUAD\n2 friendly soldiers will follow you and attack nearby enemies.\n6 enemy soldiers are placed around the battlefield."
+func _on_peer_connected(id: int):
+    info_label.text = "Player connected. Current players: " + str(multiplayer.get_peers().size() + 1) + " / " + str(MAX_PLAYERS)
+
+func _on_peer_disconnected(id: int):
+    info_label.text = "Player left. Current players: " + str(multiplayer.get_peers().size() + 1) + " / " + str(MAX_PLAYERS)
+
+func _on_connected():
+    info_label.text = "Connected to room! Waiting for match start."
+
+func _on_connection_failed():
+    multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+    info_label.text = "Connection failed. Check IP, server status and UDP port 24560."
+
+func _on_server_disconnected():
+    multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
+    info_label.text = "Disconnected from room."
+
+func _update_graphics_button():
+    graphics_button.text = "GRAPHICS: PERFORMANCE" if performance_mode else "GRAPHICS: BALANCED"
 
 func _toggle_graphics():
     performance_mode = not performance_mode
-    _save_settings()
+    var config = ConfigFile.new()
+    config.set_value("graphics", "performance", performance_mode)
+    config.save(SETTINGS_PATH)
     _update_graphics_button()
-    if performance_mode:
-        info_label.text = "Performance mode saved. Dynamic shadows are disabled in the match to help reduce GPU load."
-    else:
-        info_label.text = "Balanced mode saved. Battlefield lighting and directional shadows are enabled."
+    info_label.text = "Graphics preference saved."
 
-func _unhandled_key_input(event):
-    if event.is_action_pressed("ui_cancel"):
-        get_tree().quit()
+func _exit_tree():
+    if multiplayer.multiplayer_peer != null:
+        multiplayer.multiplayer_peer.close()
