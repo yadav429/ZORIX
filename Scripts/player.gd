@@ -28,6 +28,7 @@ var downed_by_peer_id: int = 0
 var revive_target = null
 var revive_progress: float = 0.0
 var weapon_switch_cooldown: float = 0.0
+var last_model_weapon_index := -1
 const WEAPON_DATA := [
     {"name": "RIFLE", "damage": 25, "cooldown": 0.18, "range": 150.0, "mag": 30},
     {"name": "SMG", "damage": 17, "cooldown": 0.095, "range": 95.0, "mag": 36},
@@ -85,6 +86,8 @@ func _ready():
     health_sync.delta_interval = 0.1
     add_child(health_sync)
 
+    create_gun()
+
     if not is_multiplayer_authority():
         return
 
@@ -109,7 +112,6 @@ func _ready():
     spring_arm.add_child(camera)
     camera.current = true
 
-    create_gun()
 
 func refresh_gun_model():
     if gun_node != null and is_instance_valid(gun_node):
@@ -118,6 +120,7 @@ func refresh_gun_model():
 
 func create_gun():
     gun_node = Node3D.new()
+    last_model_weapon_index = current_weapon_index
     gun_node.name = "SoldierGun"
     gun_node.position = Vector3(0.43, 1.25, -0.32)
     add_child(gun_node)
@@ -173,6 +176,11 @@ func create_gun():
     sight.position = Vector3(0, 0.13, -0.10)
     sight.material_override = dark
     gun_node.add_child(sight)
+
+func _process(_delta: float):
+    if gun_node != null and current_weapon_index != last_model_weapon_index:
+        last_model_weapon_index = current_weapon_index
+        refresh_gun_model()
 
 func set_mobile_move(value: Vector2):
     mobile_input = value.limit_length(1.0)
@@ -385,7 +393,10 @@ func _server_fire(direction: Vector3):
             object.take_damage(int(get_weapon_data().damage), get_multiplayer_authority())
 
 func take_damage(amount: int, attacker_peer_id: int = 0):
-    if not multiplayer.is_server() or is_dead or is_downed:
+    if not multiplayer.is_server() or is_dead:
+        return
+    if is_downed:
+        _final_elimination(attacker_peer_id)
         return
     health = maxi(0, health - maxi(0, amount))
     if health == 0:
