@@ -226,6 +226,10 @@ func _next_team_id() -> int:
 func _on_network_peer_connected(peer_id: int):
     if not multiplayer.is_server() or player_spawner == null:
         return
+    var match_rules = get_tree().get_first_node_in_group("match_rules")
+    if match_rules != null and match_rules.match_started:
+        multiplayer.multiplayer_peer.disconnect_peer(peer_id)
+        return
     var team_size := _team_size()
     var capacity := 10 if team_size == 5 else 50
     if get_tree().get_nodes_in_group("player").size() >= capacity:
