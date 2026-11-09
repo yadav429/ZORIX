@@ -112,11 +112,12 @@ func _build_tactical_mode():
     add_box(self, Vector3(0, 0.08, 36), Vector3(28, 0.12, 5), blue_mat)
     add_box(self, Vector3(0, 0.08, -36), Vector3(28, 0.12, 5), red_mat)
 
+    var quality := _graphics_quality()
     var sun = DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-52, -30, 0)
     sun.light_energy = 1.15
-    sun.shadow_enabled = true
-    sun.directional_shadow_max_distance = 55.0
+    sun.shadow_enabled = quality != "low"
+    sun.directional_shadow_max_distance = 38.0 if quality == "low" else (55.0 if quality == "balanced" else 78.0)
     add_child(sun)
 
     var sky = Sky.new()
@@ -214,6 +215,14 @@ func _on_network_peer_disconnected(peer_id: int):
     if player != null:
         player.queue_free()
     print("ZORIX PLAYER LEFT | peer=%d" % peer_id)
+
+func _graphics_quality() -> String:
+    var config := ConfigFile.new()
+    if config.load("user://zorix_settings.cfg") == OK:
+        var quality := str(config.get_value("graphics", "quality", "performance" if bool(config.get_value("graphics", "performance", false)) else "balanced"))
+        if quality in ["low", "balanced", "hd"]:
+            return quality
+    return "balanced"
 
 func _is_dedicated_server() -> bool:
     return OS.has_feature("dedicated_server") or OS.get_cmdline_user_args().has("--server")
@@ -313,8 +322,10 @@ func _ready():
         add_mountain(x, 49.0, h, mountain)
         add_mountain(x, 49.0, h * 0.34, snow)
 
-    # FOREST AREA: modest object count for mobile performance.
-    for i in range(52):
+    # Quality presets scale decorative object density for mobile devices.
+    var quality := _graphics_quality()
+    var tree_count := 28 if quality == "low" else (52 if quality == "balanced" else 72)
+    for i in range(tree_count):
         var x = rng.randf_range(-27.0, 28.0)
         var z = rng.randf_range(-49.0, 36.0)
         if abs(x) > 12.0 and abs(z) > 8.0:
@@ -331,7 +342,8 @@ func _ready():
         Vector3(5, 0.5, 5), military)
 
     # EXTRA ROCKS
-    for i in range(20):
+    var rock_count := 10 if quality == "low" else (20 if quality == "balanced" else 32)
+    for i in range(rock_count):
         var rock = SphereMesh.new()
         var obj = MeshInstance3D.new()
         obj.mesh = rock
@@ -352,12 +364,8 @@ func _ready():
     var sun = DirectionalLight3D.new()
     sun.rotation_degrees = Vector3(-48, -35, 0)
     sun.light_energy = 1.2
-    var graphics_config = ConfigFile.new()
-    var performance_mode = false
-    if graphics_config.load("user://zorix_settings.cfg") == OK:
-        performance_mode = bool(graphics_config.get_value("graphics", "performance", false))
-    sun.shadow_enabled = not performance_mode
-    sun.directional_shadow_max_distance = 65.0
+    sun.shadow_enabled = quality != "low"
+    sun.directional_shadow_max_distance = 42.0 if quality == "low" else (65.0 if quality == "balanced" else 90.0)
     sun.add_to_group("world_lights")
     add_child(sun)
 

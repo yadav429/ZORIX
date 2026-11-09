@@ -120,7 +120,6 @@ func create_gun():
     gun_node.add_child(grip)
 
 func set_mobile_move(value: Vector2):
-    print("ZORIX PLAYER RECEIVED MOVE: ", value)
     mobile_input = value.limit_length(1.0)
 
 func set_sprinting(value: bool):

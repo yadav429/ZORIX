@@ -8,10 +8,12 @@ const MAX_PLAYERS := 50
 
 var content: VBoxContainer
 var info_label: Label
-var graphics_button: Button
+var graphics_picker: OptionButton
+var fps_picker: OptionButton
 var address_input: LineEdit
 var mode_picker: OptionButton
-var performance_mode := false
+var graphics_quality := "balanced"
+var fps_limit := 60
 var selected_mode := "Squad"
 var selected_game_mode := "battle_royale"
 var player_account: Node
@@ -28,6 +30,7 @@ func _ready():
         return
 
     _load_settings()
+    _apply_frame_limit()
     _build_lobby()
 
 func _is_dedicated_server() -> bool:
@@ -71,14 +74,23 @@ func _start_dedicated_server():
 func _load_settings():
     var config = ConfigFile.new()
     if config.load(SETTINGS_PATH) == OK:
-        performance_mode = bool(config.get_value("graphics", "performance", false))
+        graphics_quality = str(config.get_value("graphics", "quality", "performance" if bool(config.get_value("graphics", "performance", false)) else "balanced"))
+        if graphics_quality not in ["low", "balanced", "hd"]:
+            graphics_quality = "balanced"
+        fps_limit = clampi(int(config.get_value("graphics", "fps_limit", 60)), 30, 90)
         selected_game_mode = str(config.get_value("game", "mode", "battle_royale"))
 
 func _save_settings():
     var config = ConfigFile.new()
-    config.set_value("graphics", "performance", performance_mode)
+    config.set_value("graphics", "quality", graphics_quality)
+    config.set_value("graphics", "performance", graphics_quality == "low")
+    config.set_value("graphics", "fps_limit", fps_limit)
     config.set_value("game", "mode", selected_game_mode)
     config.save(SETTINGS_PATH)
+    _apply_frame_limit()
+
+func _apply_frame_limit():
+    Engine.max_fps = fps_limit
 
 func _panel_style(color: Color, border_color: Color) -> StyleBoxFlat:
     var style = StyleBoxFlat.new()
@@ -198,10 +210,25 @@ func _build_lobby():
     local_button.pressed.connect(_play_offline)
     content.add_child(local_button)
 
-    graphics_button = _make_button("", Color("#354454"))
-    graphics_button.pressed.connect(_toggle_graphics)
-    content.add_child(graphics_button)
-    _update_graphics_button()
+    _add_section("4  GRAPHICS QUALITY")
+    graphics_picker = OptionButton.new()
+    graphics_picker.add_item("LOW  •  SMOOTH PERFORMANCE")
+    graphics_picker.add_item("BALANCED  •  FREE FIRE STYLE")
+    graphics_picker.add_item("HD  •  SHARPER VISUALS")
+    graphics_picker.select(["low", "balanced", "hd"].find(graphics_quality))
+    graphics_picker.custom_minimum_size.y = 46
+    graphics_picker.item_selected.connect(_on_graphics_quality_selected)
+    content.add_child(graphics_picker)
+
+    _add_section("5  FRAME RATE")
+    fps_picker = OptionButton.new()
+    fps_picker.add_item("30 FPS  •  BATTERY SAVER")
+    fps_picker.add_item("60 FPS  •  SMOOTH")
+    fps_picker.add_item("90 FPS  •  SUPPORTED DEVICES")
+    fps_picker.select(0 if fps_limit <= 30 else (2 if fps_limit >= 90 else 1))
+    fps_picker.custom_minimum_size.y = 46
+    fps_picker.item_selected.connect(_on_fps_selected)
+    content.add_child(fps_picker)
     _update_mode_status()
 
     var panel = PanelContainer.new()
@@ -342,14 +369,15 @@ func _on_server_disconnected():
     multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
     info_label.text = "Disconnected from room."
 
-func _update_graphics_button():
-    graphics_button.text = "GRAPHICS: PERFORMANCE" if performance_mode else "GRAPHICS: BALANCED"
-
-func _toggle_graphics():
-    performance_mode = not performance_mode
+func _on_graphics_quality_selected(index: int):
+    graphics_quality = ["low", "balanced", "hd"][clampi(index, 0, 2)]
     _save_settings()
-    _update_graphics_button()
-    info_label.text = "Graphics preference saved."
+    info_label.text = "Graphics set to %s. It applies when the next match loads." % graphics_quality.to_upper()
+
+func _on_fps_selected(index: int):
+    fps_limit = [30, 60, 90][clampi(index, 0, 2)]
+    _save_settings()
+    info_label.text = "FPS target set to %d. Actual FPS depends on your device." % fps_limit
 
 func _exit_tree():
     if multiplayer.multiplayer_peer != null:
