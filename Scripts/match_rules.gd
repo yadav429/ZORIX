@@ -79,8 +79,8 @@ func _create_safe_zone_ring():
     mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
     safe_zone_ring.material_override = mat
     var ring = TorusMesh.new()
-    ring.inner_radius = 0.97
-    ring.outer_radius = 1.03
+    ring.inner_radius = 0.997
+    ring.outer_radius = 1.003
     ring.rings = 48
     ring.ring_segments = 6
     safe_zone_ring.mesh = ring
