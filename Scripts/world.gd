@@ -169,8 +169,35 @@ func _build_tactical_mode():
     ui.set_script(MOBILE_UI)
     add_child(ui)
 
+var player_spawner: MultiplayerSpawner
+
+func _spawn_network_player(data: Variant) -> Node:
+    var peer_id := int(data.get("peer_id", 1))
+    var player := PLAYER.instantiate()
+    player.name = "Player_%d" % peer_id
+    player.set_multiplayer_authority(peer_id)
+    player.position = data.get("spawn_position", Vector3(0, 0, 25))
+    return player
+
+func _on_network_peer_connected(peer_id: int):
+    if not multiplayer.is_server() or player_spawner == null:
+        return
+    var spawn_position := Vector3(float((peer_id % 5) - 2) * 3.0, 0, 25.0 + float(peer_id % 3) * 3.0)
+    player_spawner.spawn({"peer_id": peer_id, "spawn_position": spawn_position})
+
+func _setup_player_networking():
+    player_spawner = MultiplayerSpawner.new()
+    player_spawner.name = "PlayerSpawner"
+    player_spawner.spawn_path = NodePath("..")
+    player_spawner.spawn_function = Callable(self, "_spawn_network_player")
+    add_child(player_spawner)
+    multiplayer.peer_connected.connect(_on_network_peer_connected)
+    if multiplayer.is_server():
+        player_spawner.spawn({"peer_id": multiplayer.get_unique_id(), "spawn_position": Vector3(0, 0, 25)})
+
 func _ready():
-    rng.randomize()
+    rng.seed = 842771
+    _setup_player_networking()
 
     var mode_config = ConfigFile.new()
     if mode_config.load("user://zorix_settings.cfg") == OK:
@@ -322,30 +349,30 @@ func _ready():
     add_child(world_env)
 
     # PLAYER
-    var player = PLAYER.instantiate()
-    player.position = Vector3(0, 0, 25)
-    add_child(player)
+    var player = get_node_or_null("Player_%d" % multiplayer.get_unique_id())
+    if player == null:
+        player = get_tree().get_first_node_in_group("local_player")
 
-    # SIX ENEMY SOLDIERS
-    var enemy_positions = [
+    # Server owns AI simulation; remote clients receive the player entities.
+    if multiplayer.is_server():
+        var enemy_positions = [
         Vector3(0, 0, 7), Vector3(-6, 0, 5),
         Vector3(6, 0, 5), Vector3(-10, 0, -4),
         Vector3(10, 0, -4), Vector3(0, 0, -12)
     ]
-    for enemy_pos in enemy_positions:
-        var enemy = ENEMY.new()
-        enemy.position = enemy_pos
-        add_child(enemy)
+        for enemy_pos in enemy_positions:
+            var enemy = ENEMY.new()
+            enemy.position = enemy_pos
+            add_child(enemy)
 
-    # TWO FRIENDLY SQUAD SOLDIERS
-    for squad_index in range(2):
-        var squad = FRIENDLY.new()
-        squad.name = "FriendlySquad_%d" % (squad_index + 1)
-        squad.follow_offset = Vector3(
-            -2.4 if squad_index == 0 else 2.4, 0, 3.0
-        )
-        squad.position = player.position + squad.follow_offset
-        add_child(squad)
+        # TWO FRIENDLY SQUAD SOLDIERS
+        if player != null:
+            for squad_index in range(2):
+                var squad = FRIENDLY.new()
+                squad.name = "FriendlySquad_%d" % (squad_index + 1)
+                squad.follow_offset = Vector3(-2.4 if squad_index == 0 else 2.4, 0, 3.0)
+                squad.position = player.position + squad.follow_offset
+                add_child(squad)
 
     # MOBILE CONTROLS
     var ui = CanvasLayer.new()
