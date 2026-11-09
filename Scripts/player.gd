@@ -268,16 +268,34 @@ func add_weapon(weapon_id: int) -> bool:
     weapon_inventory.append(weapon_id)
     return true
 
+func try_revive_nearby():
+    if is_dead or is_downed:
+        return
+    if multiplayer.is_server():
+        _server_revive_nearby(get_multiplayer_authority())
+    else:
+        request_revive_nearby.rpc_id(1)
+
 @rpc("any_peer", "call_remote", "reliable")
-func request_revive(target_peer_id: int):
+func request_revive_nearby():
     if not multiplayer.is_server() or multiplayer.get_remote_sender_id() != get_multiplayer_authority():
         return
-    var target := get_parent().get_node_or_null("Player_%d" % target_peer_id)
-    if target == null or not target.is_downed or target.is_dead or is_dead or is_downed:
+    _server_revive_nearby(get_multiplayer_authority())
+
+func _server_revive_nearby(reviver_peer_id: int):
+    if is_dead or is_downed:
         return
-    if team_id != target.team_id or global_position.distance_to(target.global_position) > 3.2:
-        return
-    target._begin_revive(get_multiplayer_authority())
+    var closest: Node = null
+    var closest_distance := 3.2
+    for candidate in get_tree().get_nodes_in_group("player"):
+        if candidate == self or not candidate.is_downed or candidate.is_dead or candidate.team_id != team_id:
+            continue
+        var distance := global_position.distance_to(candidate.global_position)
+        if distance <= closest_distance:
+            closest = candidate
+            closest_distance = distance
+    if closest != null:
+        closest._begin_revive(reviver_peer_id)
 
 func _begin_revive(reviver_peer_id: int):
     if not multiplayer.is_server() or not is_downed or is_dead:
