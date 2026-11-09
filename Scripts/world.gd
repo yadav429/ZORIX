@@ -196,7 +196,7 @@ func _spawn_network_player(data: Variant) -> Node:
     var player := PLAYER.instantiate()
     player.name = "Player_%d" % peer_id
     player.set_multiplayer_authority(peer_id)
-    player.team_id = int(data.get("team_id", peer_id - 1))
+    player.set("team_id", int(data.get("team_id", peer_id - 1)))
     player.position = data.get("spawn_position", Vector3(0, 0, 25))
     return player
 
@@ -210,10 +210,18 @@ func _team_size() -> int:
 
 func _next_team_id() -> int:
     var team_size := _team_size()
-    var joined_count := get_tree().get_nodes_in_group("player").size()
-    if team_size == 5:
-        return 0 if joined_count < 5 else 1
-    return int(joined_count / team_size)
+    var team_counts := {}
+    var highest_team := -1
+    for player in get_tree().get_nodes_in_group("player"):
+        var existing_team := int(player.team_id)
+        team_counts[existing_team] = int(team_counts.get(existing_team, 0)) + 1
+        highest_team = maxi(highest_team, existing_team)
+    if team_size == 1:
+        return highest_team + 1
+    for candidate_team in range(highest_team + 2):
+        if int(team_counts.get(candidate_team, 0)) < team_size:
+            return candidate_team
+    return highest_team + 1
 
 func _on_network_peer_connected(peer_id: int):
     if not multiplayer.is_server() or player_spawner == null:
