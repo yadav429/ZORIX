@@ -67,9 +67,9 @@ func _process(delta: float):
     if not match_finished:
         if tactical_mode:
             if bomb_defused:
-                _finish_match(0, "BOMB DEFUSED")
+                _finish_match(1, "BOMB DEFUSED")
             elif bomb_exploded:
-                _finish_match(1, "BOMB EXPLODED")
+                _finish_match(0, "BOMB EXPLODED")
         else:
             _evaluate_battle_royale_result()
 
@@ -173,7 +173,7 @@ func _server_tactical_action(peer_id: int):
     if player == null or player.is_dead:
         return
 
-    var is_attacker = (peer_id % 2) == 1
+    var is_attacker = player.team_id == 0
     if not bomb_planted:
         if not is_attacker:
             return
