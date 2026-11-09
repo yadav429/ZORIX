@@ -21,6 +21,12 @@ func _ready():
     if config.load("user://zorix_settings.cfg") == OK:
         tactical_mode = str(config.get_value("game", "mode", "battle_royale")) == "tactical_5v5"
 
+    if tactical_mode:
+        bomb_position = Vector3(-34, 0.5, -28)
+        _create_bomb_visual()
+    else:
+        _create_safe_zone_ring()
+
     var sync = MultiplayerSynchronizer.new()
     sync.name = "RulesSync"
     sync.root_path = NodePath("..")
@@ -31,16 +37,12 @@ func _ready():
     replication.add_property(NodePath(".:bomb_exploded"))
     replication.add_property(NodePath(".:bomb_timer"))
     replication.add_property(NodePath(".:bomb_position"))
-    replication.add_property(NodePath("BombDevice:visible"))
-    replication.add_property(NodePath("BombDevice:position"))
-    sync.replication_config = replication
-    add_child(sync)
-
     if tactical_mode:
-        bomb_position = Vector3(-34, 0.5, -28)
-        _create_bomb_visual()
-    else:
-        _create_safe_zone_ring()
+        replication.add_property(NodePath("BombDevice:visible"))
+        replication.add_property(NodePath("BombDevice:position"))
+    sync.replication_config = replication
+    sync.set_multiplayer_authority(1)
+    add_child(sync)
 
     if multiplayer.is_server() and not tactical_mode:
         _spawn_loot()
