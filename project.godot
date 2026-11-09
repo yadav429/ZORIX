@@ -1,17 +1,12 @@
 ; Engine configuration file.
-; It's best edited using the editor UI and not directly,
-; since the parameters that go here are not all obvious.
-;
-; Format:
-;   [section] ; section goes between []
-;   param=value ; assign values to parameters
+; ZORIX mobile battlefield project
 
 config_version=5
 
 [application]
 
 config/name="ZORIX"
-run/main_scene="res://Scenes/Main.tscn"
+run/main_scene="res://Scenes/Lobby.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 
@@ -28,6 +23,4 @@ window/stretch/aspect="expand"
 
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
-
-[rendering]
 textures/vram_compression/import_etc2_astc=true
