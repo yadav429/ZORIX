@@ -10,7 +10,9 @@ services:
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
     envVars:
-      - key: GOOGLE_CLIENT_ID\n        value: 12896414115-g4950lhr34mbcpugje8ga9kq8uufpl5b.apps.googleusercontent.com\n      - key: ZORIX_JWT_SECRET
+      - key: GOOGLE_CLIENT_ID
+        value: 12896414115-g4950lhr34mbcpugje8ga9kq8uufpl5b.apps.googleusercontent.com
+      - key: ZORIX_JWT_SECRET
         generateValue: true
       - key: ZORIX_SERVER_SECRET
         generateValue: true
