@@ -13,7 +13,7 @@ var guest_button: Button
 var advanced_box: VBoxContainer
 var token := ""
 var player_name := ""
-var api_base_url := ""
+var api_base_url := "https://zorix-player-api-dnz5.onrender.com"
 var request_kind := "auth"
 
 func _ready():
@@ -41,10 +41,6 @@ func build_ui(parent: VBoxContainer):
     google_button.pressed.connect(_google_login)
     parent.add_child(google_button)
 
-    facebook_button = _make_login_button("CONTINUE WITH FACEBOOK", Color("#1877f2"), Color.WHITE)
-    facebook_button.pressed.connect(_facebook_login)
-    parent.add_child(facebook_button)
-
     guest_button = _make_login_button("PLAY AS GUEST", Color("#d9782d"), Color.WHITE)
     guest_button.pressed.connect(_guest_login)
     parent.add_child(guest_button)
@@ -64,13 +60,13 @@ func build_ui(parent: VBoxContainer):
     api_label.text = "Account API URL"
     advanced_box.add_child(api_label)
     api_url_input = LineEdit.new()
-    api_url_input.placeholder_text = "https://your-zorix-api-domain"
+    api_url_input.placeholder_text = "https://zorix-player-api-dnz5.onrender.com"
     api_url_input.text = api_base_url
     api_url_input.custom_minimum_size.y = 44
     advanced_box.add_child(api_url_input)
 
     status_label = Label.new()
-    status_label.text = "Google/Facebook require provider setup. Guest login can be used when the ZORIX API is online."
+    status_label.text = "Guest login is ready. Google sign-in setup is in progress."
     status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     status_label.add_theme_color_override("font_color", Color("#d8e5e6"))
@@ -129,10 +125,10 @@ func _guest_login():
         status_label.text = "Request start nahi hui: " + error_string(err)
 
 func _google_login():
-    status_label.text = "Google sign-in button ready. Google OAuth app credentials and Android callback setup are required before sign-in can be activated."
+    status_label.text = "Google login is being connected. Guest login is available now."
 
 func _facebook_login():
-    status_label.text = "Facebook sign-in button ready. Meta app credentials and Android callback setup are required before sign-in can be activated."
+    status_label.text = "Facebook login is not enabled yet."
 
 func _on_request_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray):
     _set_busy(false)
@@ -142,6 +138,16 @@ func _on_request_completed(result: int, code: int, _headers: PackedStringArray, 
         return
     if code < 200 or code >= 300:
         status_label.text = str(parsed.get("detail", "Login failed")) if parsed is Dictionary else "Request failed."
+        return
+    if request_kind == "lobby":
+        if parsed is Dictionary:
+            var servers: Array = parsed.get("servers", [])
+            if servers.is_empty():
+                status_label.text = "Login successful: " + player_name + " • Lobby ready"
+            else:
+                status_label.text = "Login successful: " + player_name + " • " + str(servers.size()) + " server(s) available"
+        else:
+            status_label.text = "Login successful: " + player_name + " • Lobby response received"
         return
     if not parsed is Dictionary or not parsed.has("token"):
         status_label.text = "Invalid account server response."
@@ -164,8 +170,6 @@ func _set_busy(busy: bool):
         guest_button.disabled = busy
     if google_button != null:
         google_button.disabled = busy
-    if facebook_button != null:
-        facebook_button.disabled = busy
 
 func is_logged_in() -> bool:
     return not token.is_empty()
