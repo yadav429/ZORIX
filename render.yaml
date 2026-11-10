@@ -12,6 +12,8 @@ services:
     envVars:
       - key: GOOGLE_CLIENT_ID
         value: 12896414115-g4950lhr34mbcpugje8ga9kq8uufpl5b.apps.googleusercontent.com
+      - key: GOOGLE_ANDROID_CLIENT_ID
+        value: 12896414115-f09li9mn4s80395tmdomjhib1rhrvd68.apps.googleusercontent.com
       - key: ZORIX_JWT_SECRET
         generateValue: true
       - key: ZORIX_SERVER_SECRET
