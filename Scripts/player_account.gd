@@ -4,13 +4,14 @@ signal login_completed(player_name: String)
 signal public_server_loaded(host: String, port: int)
 
 const SETTINGS_PATH := "user://zorix_account.cfg"
+const GOOGLE_WEB_CLIENT_ID := "12896414115-g4950lhr34mbcpugje8ga9kq8uufpl5b.apps.googleusercontent.com"
 var request: HTTPRequest
 var api_url_input: LineEdit
 var status_label: Label
 var google_button: Button
-var facebook_button: Button
 var guest_button: Button
 var advanced_box: VBoxContainer
+var google_sign_in: Object
 var token := ""
 var player_name := ""
 var api_base_url := "https://zorix-player-api-dnz5.onrender.com"
@@ -18,10 +19,22 @@ var request_kind := "auth"
 
 func _ready():
     request = HTTPRequest.new()
-    request.timeout = 20.0
+    request.timeout = 30.0
     add_child(request)
     request.request_completed.connect(_on_request_completed)
     _load_session()
+    _connect_google_plugin()
+
+func _connect_google_plugin():
+    if OS.get_name() != "Android":
+        return
+    if not Engine.has_singleton("GodotGoogleSignIn"):
+        return
+    google_sign_in = Engine.get_singleton("GodotGoogleSignIn")
+    if not google_sign_in.is_connected("sign_in_success", _on_google_sign_in_success):
+        google_sign_in.connect("sign_in_success", _on_google_sign_in_success)
+    if not google_sign_in.is_connected("sign_in_failed", _on_google_sign_in_failed):
+        google_sign_in.connect("sign_in_failed", _on_google_sign_in_failed)
 
 func build_ui(parent: VBoxContainer):
     var heading = Label.new()
@@ -66,7 +79,7 @@ func build_ui(parent: VBoxContainer):
     advanced_box.add_child(api_url_input)
 
     status_label = Label.new()
-    status_label.text = "Guest login is ready. Google sign-in setup is in progress."
+    status_label.text = "Google Login aur Guest Login available hain."
     status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     status_label.add_theme_color_override("font_color", Color("#d8e5e6"))
@@ -97,7 +110,7 @@ func _load_session():
     if cfg.load(SETTINGS_PATH) == OK:
         token = str(cfg.get_value("account", "token", ""))
         player_name = str(cfg.get_value("account", "username", ""))
-        api_base_url = str(cfg.get_value("account", "api_url", ""))
+        api_base_url = str(cfg.get_value("account", "api_url", api_base_url))
 
 func _save_session():
     var cfg = ConfigFile.new()
@@ -125,10 +138,36 @@ func _guest_login():
         status_label.text = "Request start nahi hui: " + error_string(err)
 
 func _google_login():
-    status_label.text = "Google login is being connected. Guest login is available now."
+    if OS.get_name() != "Android":
+        status_label.text = "Google Sign-In sirf Android app mein available hai."
+        return
+    _connect_google_plugin()
+    if google_sign_in == null:
+        status_label.text = "Google Sign-In plugin APK mein load nahi hua. Guest Login use kar sakte hain."
+        return
+    if not google_sign_in.isInitialized():
+        google_sign_in.initialize(GOOGLE_WEB_CLIENT_ID)
+    _set_busy(true)
+    status_label.text = "Google account chooser opening..."
+    google_sign_in.signInWithAccountChooser()
 
-func _facebook_login():
-    status_label.text = "Facebook login is not enabled yet."
+func _on_google_sign_in_success(id_token: String, email: String, display_name: String):
+    if id_token.is_empty():
+        _set_busy(false)
+        status_label.text = "Google ne ID token return nahi kiya."
+        return
+    _set_busy(true)
+    status_label.text = "Google account verify ho raha hai..."
+    request_kind = "google"
+    var payload = JSON.stringify({"id_token": id_token})
+    var err = request.request(_api_base() + "/api/google", PackedStringArray(["Content-Type: application/json"]), HTTPClient.METHOD_POST, payload)
+    if err != OK:
+        _set_busy(false)
+        status_label.text = "Google verification request start nahi hui: " + error_string(err)
+
+func _on_google_sign_in_failed(error_message: String):
+    _set_busy(false)
+    status_label.text = "Google Sign-In failed: " + error_message
 
 func _on_request_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray):
     _set_busy(false)
@@ -148,12 +187,14 @@ func _on_request_completed(result: int, code: int, _headers: PackedStringArray, 
                 status_label.text = "Login successful: " + player_name + " • " + str(servers.size()) + " server(s) available"
         else:
             status_label.text = "Login successful: " + player_name + " • Lobby response received"
+        login_completed.emit(player_name)
         return
     if not parsed is Dictionary or not parsed.has("token"):
         status_label.text = "Invalid account server response."
         return
     token = str(parsed["token"])
-    player_name = str(parsed.get("player", {}).get("username", "Guest"))
+    var player_data: Dictionary = parsed.get("player", {})
+    player_name = str(player_data.get("display_name", player_data.get("username", "Guest")))
     _save_session()
     status_label.text = "Welcome, " + player_name + " • Loading public lobby..."
     _load_public_lobby()
