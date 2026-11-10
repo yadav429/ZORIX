@@ -18,6 +18,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout Google Sign-In plugin
+        uses: actions/checkout@v4
+        with:
+          repository: NiqueWrld/GodotGoogleSignIn
+          ref: main
+          path: .godot-google-sign-in
+          persist-credentials: false
+
+      - name: Install Google Sign-In plugin
+        run: |
+          mkdir -p addons
+          cp -R .godot-google-sign-in/addons/GodotGoogleSignIn addons/GodotGoogleSignIn
+          test -s addons/GodotGoogleSignIn/plugin.cfg
+          test -s addons/GodotGoogleSignIn/bin/release/GodotGoogleSignIn-release.aar
+
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
@@ -112,13 +127,36 @@ jobs:
           export/android/java_sdk_path = "$JAVA_HOME"
           SETTINGS
 
-      - name: Import project
+      - name: Install Android Gradle build template
+        run: godot --headless --editor --path . --install-android-build-template
+
+      - name: Import project and load Android plugin
         run: godot --headless --editor --path . --quit
 
-      - name: Export APK
+      - name: Export APK (release when signing secrets are configured)
+        env:
+          ZORIX_KEYSTORE_BASE64: ${{ secrets.ZORIX_KEYSTORE_BASE64 }}
+          GODOT_ANDROID_KEYSTORE_RELEASE_PATH: ${{ runner.temp }}/zorix-release.jks
+          GODOT_ANDROID_KEYSTORE_RELEASE_USER: ${{ secrets.ZORIX_KEY_ALIAS }}
+          GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD: ${{ secrets.ZORIX_KEYSTORE_PASSWORD }}
         run: |
+          set -euo pipefail
           mkdir -p build
-          godot --headless --path . --export-debug "Android" build/ZORIX.apk
+          if [ -n "$ZORIX_KEYSTORE_BASE64" ] && [ -n "$GODOT_ANDROID_KEYSTORE_RELEASE_USER" ] && [ -n "$GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD" ]; then
+            printf '%s' "$ZORIX_KEYSTORE_BASE64" | base64 --decode > "$GODOT_ANDROID_KEYSTORE_RELEASE_PATH"
+            godot --headless --path . --export-release "Android" build/ZORIX.apk
+          else
+            echo "::warning::Release signing secrets are not configured. Building a debug APK; Google Android OAuth will not match the registered release SHA-1 yet."
+            godot --headless --path . --export-debug "Android" build/ZORIX.apk
+          fi
+
+      - name: Test player API
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error https://zorix-player-api-dnz5.onrender.com/api/health
+          status=$(curl --silent --output /tmp/google-auth-response.json --write-out '%{http_code}' -H 'Content-Type: application/json' -X POST -d '{"id_token":"invalid-test-token-not-a-real-credential"}' https://zorix-player-api-dnz5.onrender.com/api/google)
+          test "$status" = "401"
+          echo "Google token verification endpoint rejects invalid tokens as expected."
 
       - name: Verify APK
         run: |
