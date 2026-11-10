@@ -19,6 +19,7 @@ TOKEN_TTL = int(os.getenv("ZORIX_TOKEN_TTL", "604800"))
 GAME_HOST = os.getenv("ZORIX_GAME_HOST", "")
 GAME_PORT = int(os.getenv("ZORIX_GAME_PORT", "24560"))
 GAME_MODE = os.getenv("ZORIX_GAME_MODE", "battle_royale")
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
 MAX_PLAYERS = min(50, max(2, int(os.getenv("ZORIX_MAX_PLAYERS", "50"))))
 
 app = FastAPI(title="ZORIX Player API", version="1.0.0")
@@ -27,6 +28,9 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["GET", "P
 class Credentials(BaseModel):
     username: str = Field(min_length=3, max_length=20)
     password: str = Field(min_length=8, max_length=128)
+
+class GoogleToken(BaseModel):
+    id_token: str = Field(min_length=20, max_length=8192)
 
 def db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
@@ -95,6 +99,51 @@ def guest_login():
     finally:
         con.close()
     return {"token": issue_token(player_id, username), "player": {"id": player_id, "username": username, "guest": True}}
+
+@app.post("/api/google")
+def google_login(body: GoogleToken):
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(503, "Google OAuth client ID is not configured")
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+        claims = id_token.verify_oauth2_token(
+            body.id_token,
+            google_requests.Request(),
+            GOOGLE_CLIENT_ID,
+        )
+    except Exception:
+        raise HTTPException(401, "Invalid or expired Google ID token")
+
+    subject = str(claims.get("sub", "")).strip()
+    email = str(claims.get("email", "")).strip().lower()
+    if not subject or not email or claims.get("email_verified") is not True:
+        raise HTTPException(401, "Google account email is not verified")
+
+    # Stable internal username derived from Google's immutable subject ID.
+    username = "g" + hashlib.sha256(subject.encode()).hexdigest()[:18]
+    con = db()
+    try:
+        row = con.execute("SELECT id, username FROM players WHERE username=?", (username,)).fetchone()
+        if row is None:
+            salt = secrets.token_bytes(16)
+            password = secrets.token_urlsafe(48)
+            cur = con.execute(
+                "INSERT INTO players(username,salt,password_hash,created_at) VALUES(?,?,?,?)",
+                (username, salt.hex(), hash_password(password, salt), int(time.time())),
+            )
+            con.commit()
+            player_id = cur.lastrowid
+        else:
+            player_id = row["id"]
+    finally:
+        con.close()
+
+    display_name = str(claims.get("name") or email.split("@")[0])[:40]
+    return {
+        "token": issue_token(player_id, username),
+        "player": {"id": player_id, "username": username, "display_name": display_name, "google": True},
+    }
 
 @app.post("/api/register")
 def register(body: Credentials):
