@@ -13,7 +13,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -145,6 +145,10 @@ jobs:
           if [ -n "$ZORIX_KEYSTORE_BASE64" ] && [ -n "$GODOT_ANDROID_KEYSTORE_RELEASE_USER" ] && [ -n "$GODOT_ANDROID_KEYSTORE_RELEASE_PASSWORD" ]; then
             printf '%s' "$ZORIX_KEYSTORE_BASE64" | base64 --decode > "$GODOT_ANDROID_KEYSTORE_RELEASE_PATH"
             godot --headless --path . --export-release "Android" build/ZORIX.apk
+            actual_sha1=$("$ANDROID_HOME/build-tools/35.0.1/apksigner" verify --print-certs build/ZORIX.apk | awk -F': ' '/Signer #1 certificate SHA-1 digest/ {print tolower($2)}' | tr -d ':')
+            expected_sha1="060dc9746a822c2c54a60037c7c021a858f353cf"
+            test "$actual_sha1" = "$expected_sha1"
+            echo "Release APK signing SHA-1 matches the Google Android OAuth client."
           else
             echo "::warning::Release signing secrets are not configured. Building a debug APK; Google Android OAuth will not match the registered release SHA-1 yet."
             godot --headless --path . --export-debug "Android" build/ZORIX.apk
