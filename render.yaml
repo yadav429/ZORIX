@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: zorix-player-api
+    runtime: python
+    plan: free
+    region: singapore
+    branch: feature/three-option-login
+    rootDir: auth
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: GOOGLE_CLIENT_ID
+        value: 12896414115-g4950lhr34mbcpugje8ga9kq8uufpl5b.apps.googleusercontent.com
+      - key: GOOGLE_ANDROID_CLIENT_ID
+        value: 12896414115-f09li9mn4s80395tmdomjhib1rhrvd68.apps.googleusercontent.com
+      - key: ZORIX_JWT_SECRET
+        generateValue: true
+      - key: ZORIX_SERVER_SECRET
+        generateValue: true
+      - key: ZORIX_JOIN_TICKET_SECRET
+        generateValue: true
+      - key: ZORIX_AUTH_DB
+        value: /tmp/zorix_auth.sqlite3
