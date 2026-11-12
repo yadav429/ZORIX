@@ -127,12 +127,18 @@ jobs:
           export/android/java_sdk_path = "$JAVA_HOME"
           SETTINGS
 
-      - name: Install Android Gradle build template
-        timeout-minutes: 5
+      - name: Start ADB server for headless Android tooling
         run: |
           set -euo pipefail
-          # Install the project-local Android Gradle template and explicitly quit
-          # the headless editor so CI cannot remain attached to the editor process.
+          adb start-server
+          adb devices
+
+      - name: Install Android Gradle build template
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          # Godot's Android editor integration probes ADB during initialization.
+          # Start the daemon explicitly on the GitHub runner before template install.
           godot --headless --editor --path . --install-android-build-template --quit
           test -d android/build
 
