@@ -16,6 +16,7 @@ SERVER_SECRET = os.getenv("ZORIX_SERVER_SECRET", "")
 TICKET_SECRET = os.getenv("ZORIX_JOIN_TICKET_SECRET", "") or SERVER_SECRET
 HEARTBEAT_TTL = max(15, int(os.getenv("ZORIX_SERVER_HEARTBEAT_TTL", "45")))
 MATCH_SIZE = min(50, max(2, int(os.getenv("ZORIX_MATCH_SIZE", "50"))))
+MIN_MATCH_PLAYERS = min(50, max(2, int(os.getenv("ZORIX_MIN_MATCH_PLAYERS", "2"))))
 
 
 class ServerRegister(BaseModel):
@@ -35,6 +36,7 @@ class ServerHeartbeat(BaseModel):
 class AllocateRequest(BaseModel):
     mode: str = Field(pattern="^(solo|duo|squad)$")
     limit: int = Field(default=50, ge=2, le=50)
+    min_players: Optional[int] = Field(default=None, ge=2, le=50)
 
 
 class TicketConsume(BaseModel):
@@ -186,10 +188,12 @@ def install_server_fleet_routes(app, db_factory, current_player):
                     all_members = con.execute("SELECT COUNT(*) n FROM team_members WHERE team_id=?", (tid,)).fetchone()["n"]
                     if len(members) == all_members:
                         units.append([int(m["player_id"]) for m in members])
-            capacity = min(body.limit, int(server["max_players"]))
-            # Squad teams contain four players, so a 50-slot server can fill with
-            # 48 players (12 complete squads) rather than splitting a squad.
-            required = capacity - 3 if body.mode == "squad" else capacity
+            # Keep complete teams: a 50-slot server can host 48 Squad players.
+            team_size = 4 if body.mode == "squad" else 2 if body.mode == "duo" else 1
+            raw_capacity = min(body.limit, int(server["max_players"]))
+            capacity = raw_capacity - (raw_capacity % team_size)
+            minimum_two_teams = team_size * 2
+            required = min(capacity, max(minimum_two_teams, body.min_players if body.min_players is not None else capacity))
             selected = []
             for unit in units:
                 if len(selected) + len(unit) > capacity:
@@ -225,7 +229,7 @@ def install_server_fleet_routes(app, db_factory, current_player):
     def matchmaking_status(player=Depends(current_player)):
         con = connection()
         try:
-            row = con.execute("""SELECT mp.match_id,gm.mode,gm.status,gs.server_id,gs.host,gs.port
+            row = con.execute("""SELECT mp.match_id,mp.team_number,gm.mode,gm.status,gs.server_id,gs.host,gs.port
                 FROM match_players mp JOIN game_matches gm ON gm.id=mp.match_id
                 JOIN match_server_assignments msa ON msa.match_id=gm.id
                 JOIN game_servers gs ON gs.server_id=msa.server_id
@@ -233,8 +237,26 @@ def install_server_fleet_routes(app, db_factory, current_player):
                 ORDER BY gm.created_at DESC LIMIT 1""", (player["id"],)).fetchone()
             if row is None:
                 queued = con.execute("SELECT mode,queued_at FROM match_queue WHERE player_id=?", (player["id"],)).fetchone()
-                return {"status": "queued" if queued else "not_queued",
-                        "mode": queued["mode"] if queued else None}
+                if queued is not None and len(SERVER_SECRET) >= 32:
+                    # Player polling triggers allocation when a healthy server and
+                    # enough complete team units are ready.
+                    allocate(AllocateRequest(mode=queued["mode"], limit=MATCH_SIZE, min_players=MIN_MATCH_PLAYERS), SERVER_SECRET)
+                    row = con.execute("""SELECT mp.match_id,mp.team_number,gm.mode,gm.status,gs.server_id,gs.host,gs.port
+                        FROM match_players mp JOIN game_matches gm ON gm.id=mp.match_id
+                        JOIN match_server_assignments msa ON msa.match_id=gm.id
+                        JOIN game_servers gs ON gs.server_id=msa.server_id
+                        WHERE mp.player_id=? AND gm.status='allocated'
+                        ORDER BY gm.created_at DESC LIMIT 1""", (player["id"],)).fetchone()
+                if row is None:
+                    waiting_count = con.execute("SELECT COUNT(*) AS n FROM match_queue WHERE mode=?",
+                                                 (queued["mode"],)).fetchone()["n"] if queued else 0
+                    return {"status": "queued" if queued else "not_queued",
+                            "mode": queued["mode"] if queued else None,
+                            "players_waiting": int(waiting_count)}
+            existing_ticket = con.execute("SELECT consumed_at,expires_at FROM player_join_tickets WHERE player_id=? AND match_id=?",
+                                            (player["id"], row["match_id"])).fetchone()
+            if existing_ticket is not None and existing_ticket["consumed_at"] is not None:
+                return {"status": "joined", "match_id": row["match_id"], "mode": row["mode"]}
             expires = int(time.time()) + 120
             token = _ticket(int(player["id"]), int(row["match_id"]), row["server_id"], expires)
             digest = hashlib.sha256(token.encode()).hexdigest()
@@ -243,7 +265,7 @@ def install_server_fleet_routes(app, db_factory, current_player):
                 token_hash=excluded.token_hash,expires_at=excluded.expires_at,consumed_at=NULL""",
                 (player["id"], row["match_id"], digest, expires))
             con.commit()
-            return {"status": "allocated", "match_id": row["match_id"], "mode": row["mode"],
+            return {"status": "allocated", "match_id": row["match_id"], "team_number": row["team_number"], "mode": row["mode"],
                     "server": {"host": row["host"], "port": row["port"]},
                     "join_ticket": token, "ticket_expires_at": expires}
         finally:
@@ -282,8 +304,16 @@ def install_server_fleet_routes(app, db_factory, current_player):
                     or not hmac.compare_digest(claims["server"], x_zorix_server_id)):
                 con.rollback()
                 raise HTTPException(401, "Ticket is not for this game server")
+            membership = con.execute("""SELECT mp.team_number,gm.mode FROM match_players mp
+                                     JOIN game_matches gm ON gm.id=mp.match_id
+                                     WHERE mp.match_id=? AND mp.player_id=?""",
+                                     (int(claims["match"]), int(claims["sub"]))).fetchone()
+            if membership is None:
+                con.rollback()
+                raise HTTPException(401, "Player is not assigned to this match")
             con.commit()
-            return {"ok": True, "player_id": int(claims["sub"]), "match_id": int(claims["match"])}
+            return {"ok": True, "player_id": int(claims["sub"]), "match_id": int(claims["match"]),
+                    "team_number": int(membership["team_number"]), "mode": str(membership["mode"])}
         finally:
             con.close()
 

@@ -25,6 +25,9 @@ rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 textures/vram_compression/import_etc2_astc=true
 
+[autoload]
+ServerFleetAgent="*res://Scripts/server_fleet_agent.gd"
+
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/GodotGoogleSignIn/plugin.cfg")

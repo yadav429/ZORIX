@@ -23,6 +23,7 @@ class EquipSkin(BaseModel):
     skin_id: str = Field(min_length=2, max_length=48)
 class MatchResult(BaseModel):
     player_id: int = Field(gt=0)
+    match_id: Optional[str] = Field(default=None, min_length=6, max_length=128)
     placement: int = Field(ge=1, le=50)
     kills: int = Field(ge=0, le=50)
 
@@ -187,12 +188,14 @@ def install_game_feature_routes(app, db_factory, current_player):
             ensure_player(con,player)
             team=con.execute("SELECT t.id,t.mode FROM game_teams t JOIN team_members tm ON tm.team_id=t.id WHERE tm.player_id=?",(player["id"],)).fetchone()
             if body.mode=="solo" and team: raise HTTPException(400,"Leave your team before Solo queue")
-            if body.mode!="solo" and (team is None or team["mode"]!=body.mode): raise HTTPException(400,"Create or join a matching Duo/Squad team first")
+            if team is not None and body.mode!="solo" and team["mode"]!=body.mode:
+                raise HTTPException(400,"Your current team mode does not match this queue")
+            # No premade team is required: solo players can be auto-filled into Duo/Squad.
             tid=int(team["id"]) if team else None
             con.execute("INSERT INTO match_queue(player_id,mode,team_id,queued_at) VALUES(?,?,?,?) ON CONFLICT(player_id) DO UPDATE SET mode=excluded.mode,team_id=excluded.team_id,queued_at=excluded.queued_at",(player["id"],body.mode,tid,int(time.time())))
             con.commit()
             waiting=con.execute("SELECT COUNT(*) n FROM match_queue WHERE mode=?",(body.mode,)).fetchone()["n"]
-            return {"status":"queued","mode":body.mode,"players_waiting":waiting,"max_players":50,"note":"Queue is persisted; public game-server allocation is not yet connected."}
+            return {"status":"queued","mode":body.mode,"players_waiting":waiting,"max_players":50,"note":"Queue saved. Poll /api/matchmaking/status for automatic server allocation."}
         finally: con.close()
 
     @router.delete("/matchmaking/queue")

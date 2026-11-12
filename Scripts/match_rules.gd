@@ -235,6 +235,8 @@ func _finish_match(winner_team_id: int, reason: String):
         return
     match_finished = true
     print("ZORIX MATCH RESULT | winner_team=%d | reason=%s" % [winner_team_id, reason])
+    if ServerFleetAgent.has_method("report_active_match_results"):
+        ServerFleetAgent.report_active_match_results(winner_team_id)
     show_match_result.rpc(winner_team_id, reason)
 
 @rpc("authority", "call_local", "reliable")
@@ -274,7 +276,9 @@ func show_match_result(winner_team_id: int, reason: String):
     result.add_theme_color_override("font_color", Color("#ffffff"))
     column.add_child(result)
     var details := Label.new()
-    details.text = "%s\\nTeam %d\\nKills: %d  |  Deaths: %d" % [reason, winner_team_id, int(local_player.kills) if local_player != null else 0, int(local_player.deaths) if local_player != null else 0]
+    details.text = "%s\
+Team %d\
+Kills: %d  |  Deaths: %d" % [reason, winner_team_id, int(local_player.kills) if local_player != null else 0, int(local_player.deaths) if local_player != null else 0]
     details.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     details.add_theme_font_size_override("font_size", 16)
     column.add_child(details)

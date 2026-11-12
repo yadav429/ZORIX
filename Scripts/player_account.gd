@@ -231,3 +231,9 @@ func logout():
     _save_session()
     if status_label != null:
         status_label.text = "Logged out. Choose a login option."
+
+func get_session_token() -> String:
+    return token
+
+func get_api_base_url() -> String:
+    return _api_base()

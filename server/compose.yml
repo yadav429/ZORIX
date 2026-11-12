@@ -7,6 +7,9 @@ services:
     environment:
       ZORIX_AUTH_DB: /data/zorix_auth.sqlite3
       ZORIX_JWT_SECRET: ${ZORIX_JWT_SECRET:?Set a long random ZORIX_JWT_SECRET in .env}
+      ZORIX_SERVER_SECRET: ${ZORIX_SERVER_SECRET:?Set a long random shared server secret in .env}
+      ZORIX_JOIN_TICKET_SECRET: ${ZORIX_JOIN_TICKET_SECRET:?Set a separate long random ticket secret in .env}
+      ZORIX_MIN_MATCH_PLAYERS: ${ZORIX_MIN_MATCH_PLAYERS:-2}
       ZORIX_GAME_HOST: ${ZORIX_GAME_HOST:-}
       ZORIX_GAME_PORT: ${PORT:-24560}
       ZORIX_GAME_MODE: ${GAME_MODE:-battle_royale}
@@ -26,6 +29,11 @@ services:
       PORT: ${PORT:-24560}
       MAX_PLAYERS: ${MAX_PLAYERS:-50}
       GAME_MODE: ${GAME_MODE:-battle_royale}
+      ZORIX_API_URL: ${ZORIX_API_URL:?Set the public HTTPS ZORIX API URL}
+      ZORIX_SERVER_SECRET: ${ZORIX_SERVER_SECRET:?Set the same secret as the API service}
+      ZORIX_PUBLIC_HOST: ${ZORIX_PUBLIC_HOST:?Set this VM's public IPv4 or DNS name}
+      ZORIX_SERVER_REGION: ${ZORIX_SERVER_REGION:-india}
+      ZORIX_SERVER_NAME: ${ZORIX_SERVER_NAME:-zorix-br-india}
     ports:
       - "${PORT:-24560}:${PORT:-24560}/udp"
     init: true
