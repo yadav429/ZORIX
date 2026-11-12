@@ -4,6 +4,7 @@ var account: Node
 var request: HTTPRequest
 var status_label: Label
 var team_mode_picker: OptionButton
+var queue_mode_picker: OptionButton
 var team_name_input: LineEdit
 var invite_input: LineEdit
 var friend_id_input: LineEdit
@@ -22,6 +23,30 @@ func build_ui(parent: VBoxContainer, account_node: Node) -> void:
     title.add_theme_color_override("font_color", Color("#62d6c6"))
     title.add_theme_font_size_override("font_size", 16)
     parent.add_child(title)
+
+    var queue_title := Label.new()
+    queue_title.text = "AUTOMATIC MATCHMAKING"
+    queue_title.add_theme_color_override("font_color", Color("#62d6c6"))
+    queue_title.add_theme_font_size_override("font_size", 16)
+    parent.add_child(queue_title)
+
+    queue_mode_picker = OptionButton.new()
+    queue_mode_picker.add_item("SOLO • 1 PLAYER")
+    queue_mode_picker.add_item("DUO • 2 PLAYERS")
+    queue_mode_picker.add_item("SQUAD • 4 PLAYERS")
+    queue_mode_picker.select(2)
+    queue_mode_picker.custom_minimum_size.y = 44
+    parent.add_child(queue_mode_picker)
+
+    var queue_button := _button("FIND MATCH", Color("#167c70"))
+    queue_button.pressed.connect(_queue_match)
+    parent.add_child(queue_button)
+    var refresh_queue_button := _button("REFRESH MATCH STATUS", Color("#254b61"))
+    refresh_queue_button.pressed.connect(_refresh_match_status)
+    parent.add_child(refresh_queue_button)
+    var cancel_queue_button := _button("CANCEL MATCH SEARCH", Color("#713e3e"))
+    cancel_queue_button.pressed.connect(_cancel_match_search)
+    parent.add_child(cancel_queue_button)
 
     team_mode_picker = OptionButton.new()
     team_mode_picker.add_item("DUO • 2 PLAYERS")
@@ -93,6 +118,18 @@ func _call_api(method: int, path: String, payload: Dictionary = {}) -> void:
     var err := request.request(api_base + path, headers, method, body)
     if err != OK:
         status_label.text = "Request could not start: " + error_string(err)
+
+
+func _queue_match() -> void:
+    var modes := ["solo", "duo", "squad"]
+    var mode := modes[clampi(queue_mode_picker.selected, 0, 2)]
+    _call_api(HTTPClient.METHOD_POST, "/api/matchmaking/queue", {"mode": mode})
+
+func _refresh_match_status() -> void:
+    _call_api(HTTPClient.METHOD_GET, "/api/matchmaking/status")
+
+func _cancel_match_search() -> void:
+    _call_api(HTTPClient.METHOD_DELETE, "/api/matchmaking/queue")
 
 func _create_team() -> void:
     var mode := "duo" if team_mode_picker.selected == 0 else "squad"
