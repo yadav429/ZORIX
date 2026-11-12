@@ -38,48 +38,42 @@ func _connect_google_plugin():
 
 func build_ui(parent: VBoxContainer):
     var heading = Label.new()
-    heading.text = "WELCOME TO ZORIX"
+    heading.text = "WELCOME, SOLDIER"
     heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    heading.add_theme_font_size_override("font_size", 24)
+    heading.add_theme_font_size_override("font_size", 21)
     heading.add_theme_color_override("font_color", Color("#f3f7f4"))
     parent.add_child(heading)
 
     var subtitle = Label.new()
-    subtitle.text = "CHOOSE HOW YOU WANT TO PLAY"
+    subtitle.text = "SIGN IN TO ENTER THE BATTLEFIELD"
     subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    subtitle.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    subtitle.add_theme_font_size_override("font_size", 12)
     subtitle.add_theme_color_override("font_color", Color("#62d6c6"))
     parent.add_child(subtitle)
 
-    google_button = _make_login_button("CONTINUE WITH GOOGLE", Color("#f3f3f3"), Color("#20252a"))
+    google_button = _make_login_button("G  CONTINUE WITH GOOGLE", Color("#f3f3f3"), Color("#20252a"))
     google_button.pressed.connect(_google_login)
     parent.add_child(google_button)
+
+    var facebook_button := _make_login_button("f  CONTINUE WITH FACEBOOK", Color("#263d63"), Color.WHITE)
+    facebook_button.disabled = true
+    parent.add_child(facebook_button)
 
     guest_button = _make_login_button("PLAY AS GUEST", Color("#d9782d"), Color.WHITE)
     guest_button.pressed.connect(_guest_login)
     parent.add_child(guest_button)
 
-    var advanced = Button.new()
-    advanced.text = "ADVANCED • SERVER SETTINGS"
-    advanced.flat = true
-    advanced.custom_minimum_size.y = 38
-    parent.add_child(advanced)
-
-    advanced_box = VBoxContainer.new()
-    advanced_box.visible = false
-    parent.add_child(advanced_box)
-    advanced.pressed.connect(func(): advanced_box.visible = not advanced_box.visible)
-
-    var api_label = Label.new()
-    api_label.text = "Account API URL"
-    advanced_box.add_child(api_label)
-    api_url_input = LineEdit.new()
-    api_url_input.placeholder_text = "https://zorix-player-api-dnz5.onrender.com"
-    api_url_input.text = api_base_url
-    api_url_input.custom_minimum_size.y = 44
-    advanced_box.add_child(api_url_input)
+    var terms := Label.new()
+    terms.text = "Facebook login coming soon • Guest progress is linked to this device/account"
+    terms.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    terms.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    terms.add_theme_font_size_override("font_size", 10)
+    terms.add_theme_color_override("font_color", Color("#91a8b0"))
+    parent.add_child(terms)
 
     status_label = Label.new()
-    status_label.text = "Google Login aur Guest Login available hain."
+    status_label.text = "Choose Google or Guest to continue."
     status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     status_label.add_theme_color_override("font_color", Color("#d8e5e6"))
