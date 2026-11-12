@@ -1,0 +1,30 @@
+FROM debian:bookworm-slim
+
+ARG GODOT_VERSION=4.7-stable
+ENV DEBIAN_FRONTEND=noninteractive \
+    GODOT_BIN=/usr/local/bin/godot \
+    ZORIX_SERVER_REGION=india \
+    ZORIX_SERVER_PORT=24560 \
+    ZORIX_MAX_PLAYERS=50
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates curl unzip libfontconfig1 libx11-6 libxcursor1 \
+    libxinerama1 libxrandr2 libxi6 libasound2 libgl1 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl --fail --location --retry 3 \
+    "https://github.com/godotengine/godot-builds/releases/download/${GODOT_VERSION}/Godot_v${GODOT_VERSION}_linux.x86_64.zip" \
+    -o /tmp/godot.zip \
+    && unzip -q /tmp/godot.zip -d /tmp/godot \
+    && install -m 0755 /tmp/godot/Godot_v${GODOT_VERSION}_linux.x86_64 "${GODOT_BIN}" \
+    && rm -rf /tmp/godot /tmp/godot.zip
+
+WORKDIR /opt/zorix
+COPY . .
+
+EXPOSE 24560/udp
+
+ENV ZORIX_API_URL=https://zorix-player-api-dnz5.onrender.com
+ENV ZORIX_SERVER_NAME=zorix-br-india-01
+
+CMD ["/bin/sh", "-c", "exec /usr/local/bin/godot --headless --audio-driver Dummy --path /opt/zorix -- --server --port=${ZORIX_SERVER_PORT} --max-players=${ZORIX_MAX_PLAYERS} --public-host=${ZORIX_PUBLIC_HOST}"]
