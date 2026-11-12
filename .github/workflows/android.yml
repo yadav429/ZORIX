@@ -128,7 +128,13 @@ jobs:
           SETTINGS
 
       - name: Install Android Gradle build template
-        run: godot --headless --editor --path . --install-android-build-template
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          # Install the project-local Android Gradle template and explicitly quit
+          # the headless editor so CI cannot remain attached to the editor process.
+          godot --headless --editor --path . --install-android-build-template --quit
+          test -d android/build
 
       - name: Import project and load Android plugin
         run: godot --headless --editor --path . --quit
