@@ -22,7 +22,7 @@ var team_id: int = -1
 var kills: int = 0
 var deaths: int = 0
 var weapon_inventory: Array[int] = [0]
-var weapon_ammo: Array[int] = [30, 36, 8, 5]
+var weapon_ammo: Array[int] = [30, 36, 8, 5, 6, 30, 8, 60]
 var current_weapon_index: int = 0
 var downed_by_peer_id: int = 0
 var revive_target = null
@@ -30,10 +30,14 @@ var revive_progress: float = 0.0
 var weapon_switch_cooldown: float = 0.0
 var last_model_weapon_index := -1
 const WEAPON_DATA := [
-    {"name": "RIFLE", "damage": 25, "cooldown": 0.18, "range": 150.0, "mag": 30},
-    {"name": "SMG", "damage": 17, "cooldown": 0.095, "range": 95.0, "mag": 36},
-    {"name": "SHOTGUN", "damage": 12, "cooldown": 0.72, "range": 32.0, "mag": 8},
-    {"name": "SNIPER", "damage": 85, "cooldown": 1.15, "range": 240.0, "mag": 5}
+    {"name": "VEER-47", "class": "ASSAULT RIFLE", "damage": 25, "cooldown": 0.18, "range": 150.0, "mag": 30},
+    {"name": "KALKA-7", "class": "SMG", "damage": 17, "cooldown": 0.095, "range": 95.0, "mag": 36},
+    {"name": "TRISHUL", "class": "SHOTGUN", "damage": 12, "cooldown": 0.72, "range": 32.0, "mag": 8},
+    {"name": "SHER-X", "class": "SNIPER RIFLE", "damage": 85, "cooldown": 1.15, "range": 240.0, "mag": 5},
+    {"name": "BRAHMOS", "class": "HEAVY LAUNCHER", "damage": 100, "cooldown": 1.6, "range": 220.0, "mag": 1},
+    {"name": "AGNI-X", "class": "ASSAULT RIFLE", "damage": 29, "cooldown": 0.16, "range": 165.0, "mag": 30},
+    {"name": "RUDRA-99", "class": "HEAVY RIFLE", "damage": 32, "cooldown": 0.22, "range": 175.0, "mag": 8},
+    {"name": "GARUD-5", "class": "LIGHT MACHINE GUN", "damage": 21, "cooldown": 0.13, "range": 145.0, "mag": 60}
 ]
 var last_server_shot_msec: int = 0
 var server_move_input := Vector2.ZERO
