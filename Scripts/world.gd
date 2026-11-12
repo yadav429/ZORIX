@@ -198,6 +198,11 @@ func _spawn_network_player(data: Variant) -> Node:
     player.set_multiplayer_authority(peer_id)
     player.set("team_id", int(data.get("team_id", peer_id - 1)))
     player.position = data.get("spawn_position", Vector3(0, 0, 25))
+    if bool(data.get("is_bot", false)):
+        var brain := Node.new()
+        brain.name = "BotAI"
+        brain.set_script(load("res://Scripts/bot_ai.gd"))
+        player.add_child(brain)
     return player
 
 func _team_size() -> int:
@@ -222,6 +227,33 @@ func _next_team_id() -> int:
         if int(team_counts.get(candidate_team, 0)) < team_size:
             return candidate_team
     return highest_team + 1
+
+
+func _fill_match_with_bots() -> void:
+    await get_tree().create_timer(12.0).timeout
+    if not multiplayer.is_server() or _team_size() == 5:
+        return
+    var humans := 0
+    for actor in get_tree().get_nodes_in_group("player"):
+        if actor.get_node_or_null("BotAI") == null:
+            humans += 1
+    if humans <= 0:
+        return
+    var bot_index := 0
+    while get_tree().get_nodes_in_group("player").size() < 50:
+        bot_index += 1
+        var bot_peer_id := 10000 + bot_index
+        var team_id := _next_team_id()
+        var angle := float(bot_index) * 2.399963
+        var radius := 18.0 + float(bot_index % 7) * 2.0
+        var spawn_position := Vector3(cos(angle) * radius, 0, sin(angle) * radius)
+        player_spawner.spawn({
+            "peer_id": bot_peer_id,
+            "team_id": team_id,
+            "is_bot": true,
+            "spawn_position": spawn_position
+        })
+    print("ZORIX BOT FILL COMPLETE | humans=%d | bots=%d | total=50" % [humans, bot_index])
 
 func _on_network_peer_connected(peer_id: int):
     if not multiplayer.is_server() or player_spawner == null:
@@ -273,6 +305,8 @@ func _setup_player_networking():
 func _ready():
     rng.seed = 842771
     _setup_player_networking()
+    if multiplayer.is_server():
+        call_deferred("_fill_match_with_bots")
 
     var mode_config = ConfigFile.new()
     if mode_config.load("user://zorix_settings.cfg") == OK:
