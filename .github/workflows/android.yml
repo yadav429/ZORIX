@@ -137,20 +137,24 @@ jobs:
         timeout-minutes: 8
         shell: bash
         run: |
-          set -uo pipefail
-          # Godot 4.7 may return a non-zero exit after completing template setup.
-          # Judge success by the generated Gradle project, while preserving diagnostics.
-          godot --headless --editor --path . --install-android-build-template --quit --verbose
-          godot_status=$?
-          echo "Godot template installer exit code: ${godot_status}"
-          echo "Generated Android project contents:"
-          if [ -d android ]; then find android -maxdepth 3 -type f | sort | head -100; else echo "android/ directory was not created"; fi
-          if [ -d android/build ]; then
-            echo "Android Gradle build template is present."
-          else
-            echo "::error::Godot did not generate android/build; template installation is incomplete."
-            exit "${godot_status:-1}"
+          set -euo pipefail
+          TEMPLATE_DIR="$HOME/.local/share/godot/export_templates/4.7.stable"
+          ANDROID_SOURCE="$(find "$TEMPLATE_DIR" -maxdepth 2 -type f -name android_source.zip -print -quit)"
+          if [ -z "$ANDROID_SOURCE" ]; then
+            echo "::error::android_source.zip is missing from the Godot 4.7 export templates."
+            find "$TEMPLATE_DIR" -maxdepth 2 -type f -print | sort
+            exit 1
           fi
+
+          # Install the official Godot Android source template directly.
+          # This avoids the headless editor installer silently exiting without
+          # creating the project-local android/build directory on CI runners.
+          mkdir -p android/build
+          unzip -q "$ANDROID_SOURCE" -d android/build
+          test -s android/build/build.gradle
+          test -s android/build/settings.gradle
+          echo "Installed Android Gradle template from: $ANDROID_SOURCE"
+          find android/build -maxdepth 2 -type f | sort | head -100
 
       - name: Import project and load Android plugin
         run: godot --headless --editor --path . --quit
