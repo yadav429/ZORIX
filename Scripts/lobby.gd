@@ -218,9 +218,13 @@ func _build_lobby():
     matchmaking_timer.timeout.connect(_poll_matchmaking)
     add_child(matchmaking_timer)
 
-    var queue_button = _make_button("FIND MATCH  •  SOLO / DUO / SQUAD", Color("#167c70"))
+    var queue_button = _make_button("FIND ONLINE MATCH  •  SOLO / DUO / SQUAD", Color("#167c70"))
     queue_button.pressed.connect(_queue_for_matchmaking)
     content.add_child(queue_button)
+
+    var practice_button = _make_button("PLAY PRACTICE MATCH  •  BOTS", Color("#815d24"))
+    practice_button.pressed.connect(_start_practice_match)
+    content.add_child(practice_button)
 
     var cancel_queue_button = _make_button("CANCEL SEARCH", Color("#8a4b25"))
     cancel_queue_button.pressed.connect(_cancel_matchmaking)
@@ -317,26 +321,18 @@ func _build_login_screen() -> void:
     top_glow.offset_bottom = 0.0
     login_overlay.add_child(top_glow)
 
-    var scroll := ScrollContainer.new()
-    scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    scroll.offset_left = 18
-    scroll.offset_right = -18
-    scroll.offset_top = 18
-    scroll.offset_bottom = -18
-    login_overlay.add_child(scroll)
-
-    var center := CenterContainer.new()
-    center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    center.size_flags_vertical = Control.SIZE_EXPAND_FILL
-    scroll.add_child(center)
-
+    # Full-screen login surface without a nested scroll area.
     var card := PanelContainer.new()
-    card.custom_minimum_size = Vector2(0, 500)
-    card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    card.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    card.offset_left = 16
+    card.offset_right = -16
+    card.offset_top = 16
+    card.offset_bottom = -16
     card.add_theme_stylebox_override("panel", _panel_style(Color("#101e29"), Color("#b58a45")))
-    center.add_child(card)
+    login_overlay.add_child(card)
 
     var margin := MarginContainer.new()
+    margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     margin.add_theme_constant_override("margin_left", 22)
     margin.add_theme_constant_override("margin_right", 22)
     margin.add_theme_constant_override("margin_top", 26)
@@ -567,6 +563,21 @@ func _on_mode_selected(index: int):
     _save_settings()
     if selected_game_mode == "battle_royale":
         info_label.text = selected_mode + " selected. Match capacity remains 50 players."
+
+func _start_practice_match() -> void:
+    # Local offline practice is available without a registered online server.
+    matchmaking_timer.stop()
+    matchmaking_busy = false
+    matchmaking_state = "idle"
+    join_ticket = ""
+    if matchmaking_request != null and matchmaking_request.get_http_client_status() != HTTPClient.STATUS_DISCONNECTED:
+        matchmaking_request.cancel_request()
+    _save_settings()
+    info_label.text = "Starting local practice match with AI soldiers..."
+    var result := get_tree().change_scene_to_file(MATCH_SCENE)
+    if result != OK:
+        info_label.text = "Practice match could not start: " + error_string(result)
+
 
 func _queue_for_matchmaking():
     if selected_game_mode != "battle_royale":
