@@ -21,6 +21,18 @@ class MinimapVisual extends Control:
             var zone_center := center + Vector2(-player.global_position.x, player.global_position.z) * 0.72
             var zone_radius := clampf(float(rules.safe_zone_radius) * 0.72, 5.0, 65.0)
             draw_arc(zone_center, zone_radius, 0.0, TAU, 64, Color(0.25, 0.8, 1.0, 0.9), 2.0)
+        for pickup in get_tree().get_nodes_in_group("loot_pickups"):
+            if not is_instance_valid(pickup):
+                continue
+            var loot_offset := Vector2(pickup.global_position.x - player.global_position.x, -(pickup.global_position.z - player.global_position.z)) * 0.72
+            if loot_offset.length() <= 61.0:
+                draw_colored_polygon(PackedVector2Array([center + loot_offset + Vector2(0, -4), center + loot_offset + Vector2(4, 0), center + loot_offset + Vector2(0, 4), center + loot_offset + Vector2(-4, 0)]), Color("#ffbd45"))
+        for other in get_tree().get_nodes_in_group("enemies"):
+            if not is_instance_valid(other):
+                continue
+            var enemy_offset := Vector2(other.global_position.x - player.global_position.x, -(other.global_position.z - player.global_position.z)) * 0.72
+            if enemy_offset.length() <= 61.0:
+                draw_circle(center + enemy_offset, 3.5, Color("#ff5555"))
         for other in get_tree().get_nodes_in_group("player"):
             if not is_instance_valid(other) or other.is_dead:
                 continue
@@ -337,6 +349,8 @@ func _process(delta):
         var status = "HP %d  |  %s %d/%d" % [p.health, str(weapon_data.name), p.ammo, p.reserve_ammo]
         if p.is_downed:
             status += "  |  DOWNED %.0fs" % p.downed_timer
+        elif p.is_reviving:
+            status += "  |  REVIVING %.1f/4s" % p.revive_progress
         elif p.is_dead:
             status += "  |  ELIMINATED"
         if weapon_button != null:

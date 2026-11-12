@@ -11,7 +11,8 @@ class ProfileUpdate(BaseModel):
     display_name: Optional[str] = Field(default=None, min_length=3, max_length=24)
     bio: Optional[str] = Field(default=None, max_length=160)
 class FriendRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=20)
+    public_id: Optional[str] = Field(default=None, min_length=6, max_length=16)
+    username: Optional[str] = Field(default=None, min_length=3, max_length=20)
 class TeamCreate(BaseModel):
     name: str = Field(min_length=3, max_length=24)
     mode: str = Field(pattern="^(solo|duo|squad)$")
@@ -86,7 +87,12 @@ def install_game_feature_routes(app, db_factory, current_player):
     def send_friend_request(body:FriendRequest,player=Depends(current_player)):
         con=connection()
         try:
-            target=con.execute("SELECT id,username FROM players WHERE username=?",(body.username.strip().lower(),)).fetchone()
+            if body.public_id:
+                target=con.execute("SELECT p.player_id AS id,pl.username FROM player_profiles p JOIN players pl ON pl.id=p.player_id WHERE p.public_id=?",(body.public_id.strip().upper(),)).fetchone()
+            elif body.username:
+                target=con.execute("SELECT id,username FROM players WHERE username=?",(body.username.strip().lower(),)).fetchone()
+            else:
+                raise HTTPException(400,"Provide a Player ID or username")
             if target is None: raise HTTPException(404,"Player not found")
             if int(target["id"])==int(player["id"]): raise HTTPException(400,"You cannot add yourself")
             con.execute("INSERT OR IGNORE INTO player_profiles(player_id,public_id,display_name,created_at) VALUES(?,?,?,?)",(target["id"],"ZX-"+secrets.token_hex(4).upper(),target["username"],int(time.time())))
