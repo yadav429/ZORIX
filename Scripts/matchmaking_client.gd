@@ -1,4 +1,6 @@
 extends Node
+# LEGACY PROTOTYPE ONLY: the active ZORIX lobby uses the player API + server fleet.
+# Do not attach this client to the production lobby.
 class_name ZorixMatchmakingClient
 
 signal status_received(data: Dictionary)
