@@ -348,9 +348,11 @@ func _spawn_network_player(data: Variant) -> Node:
     var peer_id := int(data.get("peer_id", 1))
     var player := PLAYER.instantiate()
     player.name = "Player_%d" % peer_id
-    player.set_multiplayer_authority(peer_id)
+    var is_bot := bool(data.get("is_bot", false))
+    # Bots have no connected peer; keep their replicated state server-authoritative.
+    player.set_multiplayer_authority(1 if is_bot else peer_id)
     player.set("team_id", int(data.get("team_id", peer_id - 1)))
-    player.set("is_bot", bool(data.get("is_bot", false)))
+    player.set("is_bot", is_bot)
     if player.is_bot:
         var brain := Node.new()
         brain.name = "BotAI"
