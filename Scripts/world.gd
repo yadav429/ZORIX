@@ -72,6 +72,159 @@ func add_building(x: float, z: float, h: float, concrete: Material, glass: Mater
             Vector3(5.0, 1.0, 0.12), glass)
 
 
+
+func _add_static_box(parent: Node3D, position: Vector3, size: Vector3, mat: Material, collision_size: Vector3 = Vector3.ZERO) -> StaticBody3D:
+    var body := StaticBody3D.new()
+    body.position = position
+    var visual := MeshInstance3D.new()
+    var mesh := BoxMesh.new()
+    mesh.size = size
+    visual.mesh = mesh
+    visual.material_override = mat
+    body.add_child(visual)
+    var collider := CollisionShape3D.new()
+    var shape := BoxShape3D.new()
+    shape.size = size if collision_size == Vector3.ZERO else collision_size
+    collider.shape = shape
+    body.add_child(collider)
+    parent.add_child(body)
+    return body
+
+func _add_house(x: float, z: float, wall_mat: Material, roof_mat: Material, glass_mat: Material, door_mat: Material) -> void:
+    # Small walk-in house: the front wall is split around a real doorway.
+    var root := Node3D.new()
+    root.name = "WalkInHouse_%d_%d" % [int(x), int(z)]
+    root.position = Vector3(x, 0, z)
+    add_child(root)
+    _add_static_box(root, Vector3(0, 0.16, 0), Vector3(8.0, 0.32, 7.0), wall_mat)
+    _add_static_box(root, Vector3(-3.85, 1.75, 0), Vector3(0.3, 3.2, 7.0), wall_mat)
+    _add_static_box(root, Vector3(3.85, 1.75, 0), Vector3(0.3, 3.2, 7.0), wall_mat)
+    _add_static_box(root, Vector3(0, 1.75, -3.35), Vector3(8.0, 3.2, 0.3), wall_mat)
+    _add_static_box(root, Vector3(-2.55, 1.75, 3.35), Vector3(2.9, 3.2, 0.3), wall_mat)
+    _add_static_box(root, Vector3(2.55, 1.75, 3.35), Vector3(2.9, 3.2, 0.3), wall_mat)
+    _add_static_box(root, Vector3(0, 2.95, 3.35), Vector3(2.2, 0.8, 0.3), wall_mat)
+    _add_static_box(root, Vector3(0, 3.35, 0), Vector3(8.5, 0.35, 7.5), roof_mat)
+    _add_static_box(root, Vector3(0, 1.25, 3.48), Vector3(1.35, 2.2, 0.08), door_mat)
+    # Front windows and visible glass panels.
+    for side in [-1.0, 1.0]:
+        var window := MeshInstance3D.new()
+        var pane := BoxMesh.new()
+        pane.size = Vector3(1.35, 0.9, 0.07)
+        window.mesh = pane
+        window.material_override = glass_mat
+        window.position = Vector3(side * 2.45, 2.05, 3.53)
+        root.add_child(window)
+    var sign := Label3D.new()
+    sign.text = "SAFE HOUSE"
+    sign.position = Vector3(0, 3.9, 3.9)
+    sign.font_size = 28
+    sign.modulate = Color("#f1d39a")
+    root.add_child(sign)
+
+func _add_vehicle(x: float, z: float, body_color: Color, label_text: String) -> void:
+    # Static cover vehicle for this map pass; driving/vehicle networking is a separate feature.
+    var vehicle := StaticBody3D.new()
+    vehicle.name = label_text.replace(" ", "_")
+    vehicle.position = Vector3(x, 0.55, z)
+    add_child(vehicle)
+    var paint := material(body_color, 0.62, 0.28)
+    var dark_glass := material(Color("#132a35"), 0.45, 0.18)
+    var rubber := material(Color("#111315"), 0.05, 0.92)
+    var chassis := MeshInstance3D.new()
+    var chassis_mesh := BoxMesh.new()
+    chassis_mesh.size = Vector3(2.5, 0.75, 4.4)
+    chassis.mesh = chassis_mesh
+    chassis.material_override = paint
+    vehicle.add_child(chassis)
+    var cabin := MeshInstance3D.new()
+    var cabin_mesh := BoxMesh.new()
+    cabin_mesh.size = Vector3(2.05, 0.9, 2.25)
+    cabin.mesh = cabin_mesh
+    cabin.material_override = dark_glass
+    cabin.position = Vector3(0, 0.62, -0.15)
+    vehicle.add_child(cabin)
+    var roof := MeshInstance3D.new()
+    var roof_mesh := BoxMesh.new()
+    roof_mesh.size = Vector3(2.15, 0.16, 2.35)
+    roof.mesh = roof_mesh
+    roof.material_override = paint
+    roof.position = Vector3(0, 1.18, -0.15)
+    vehicle.add_child(roof)
+    for wheel_x in [-1.18, 1.18]:
+        for wheel_z in [-1.35, 1.35]:
+            var wheel := MeshInstance3D.new()
+            var wheel_mesh := CylinderMesh.new()
+            wheel_mesh.top_radius = 0.43
+            wheel_mesh.bottom_radius = 0.43
+            wheel_mesh.height = 0.28
+            wheel_mesh.radial_segments = 12
+            wheel.mesh = wheel_mesh
+            wheel.material_override = rubber
+            wheel.rotation_degrees.z = 90
+            wheel.position = Vector3(wheel_x, -0.12, wheel_z)
+            vehicle.add_child(wheel)
+    var collider := CollisionShape3D.new()
+    var collision := BoxShape3D.new()
+    collision.size = Vector3(2.6, 1.4, 4.5)
+    collider.shape = collision
+    vehicle.add_child(collider)
+    var marker := Label3D.new()
+    marker.text = label_text
+    marker.position = Vector3(0, 1.55, 0)
+    marker.font_size = 24
+    marker.modulate = Color("#e9d5a2")
+    vehicle.add_child(marker)
+
+func _build_world_props(quality: String, concrete: Material, glass: Material, wood: Material) -> void:
+    var house_wall := material(Color("#b69a70"), 0.0, 0.92)
+    var house_roof := material(Color("#4b3830"), 0.08, 0.88)
+    var door := material(Color("#523322"), 0.0, 0.85)
+    var villa_wall := material(Color("#9caaa7"), 0.05, 0.8)
+    # Residential clusters are placed off the main road so they are usable as cover.
+    var homes := [
+        Vector2(-21, 28), Vector2(-11, 32), Vector2(17, 29),
+        Vector2(28, 30), Vector2(-24, -34), Vector2(7, -42)
+    ]
+    var count := homes.size() if quality == "low" else homes.size() + 2
+    for i in range(count):
+        var p: Vector2 = homes[i % homes.size()]
+        _add_house(p.x, p.y, house_wall if i % 2 == 0 else villa_wall, house_roof, glass, door)
+    # Existing city blocks get smaller service structures and visible road-side shops.
+    for i in range(3):
+        var x := 35.0 + float(i) * 5.5
+        _add_house(x, -27.0 + float(i) * 7.0, concrete, house_roof, glass, door)
+    _add_vehicle(-8.0, 18.0, Color("#526a43"), "ARMY JEEP")
+    _add_vehicle(19.0, 20.0, Color("#a45a28"), "DESERT SUV")
+    if quality != "low":
+        _add_vehicle(-19.0, -20.0, Color("#253d52"), "PATROL SUV")
+
+func _spawn_map_loot() -> void:
+    if not multiplayer.is_server() or player_spawner == null:
+        return
+    var pickups := [
+        {"kind":"weapon","weapon":0,"amount":30,"pos":Vector3(-20,0.2,26)},
+        {"kind":"weapon","weapon":1,"amount":36,"pos":Vector3(-10,0.2,30)},
+        {"kind":"weapon","weapon":2,"amount":8,"pos":Vector3(18,0.2,27)},
+        {"kind":"weapon","weapon":3,"amount":5,"pos":Vector3(29,0.2,28)},
+        {"kind":"weapon","weapon":4,"amount":1,"pos":Vector3(-24,0.2,-33)},
+        {"kind":"weapon","weapon":5,"amount":30,"pos":Vector3(7,0.2,-41)},
+        {"kind":"weapon","weapon":6,"amount":8,"pos":Vector3(-25,0.2,12)},
+        {"kind":"weapon","weapon":7,"amount":60,"pos":Vector3(0,0.2,5)},
+        {"kind":"ammo","weapon":0,"amount":45,"pos":Vector3(12,0.2,18)},
+        {"kind":"medkit","weapon":0,"amount":40,"pos":Vector3(-17,0.2,31)}
+    ]
+    var loot_id := 0
+    for item in pickups:
+        loot_id += 1
+        player_spawner.spawn({
+            "entity_type":"loot",
+            "loot_id":loot_id,
+            "pickup_kind":item["kind"],
+            "weapon_index":item["weapon"],
+            "amount":item["amount"],
+            "spawn_position":item["pos"]
+        })
+
 func _build_tactical_mode():
     var floor_mat = material(Color("#343b3d"), 0.15, 0.85)
     var wall_mat = material(Color("#77766d"), 0.05, 0.9)
@@ -405,6 +558,9 @@ func _ready():
     add_box(self, Vector3(-34, 8, 12),
         Vector3(5, 0.5, 5), military)
 
+    # Walk-in homes, static vehicles and road-side cover props.
+    _build_world_props(quality, concrete, glass, wood)
+
     # EXTRA ROCKS
     var rock_count := 10 if quality == "low" else (20 if quality == "balanced" else 32)
     for i in range(rock_count):
@@ -458,6 +614,7 @@ func _ready():
     match_rules.add_to_group("match_rules")
     match_rules.set_script(MATCH_RULES)
     add_child(match_rules)
+    _spawn_map_loot()
 
     # PLAYER
     var player = null
