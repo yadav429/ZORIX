@@ -18,6 +18,7 @@ var bomb_visual: MeshInstance3D
 var match_finished := false
 var match_started := false
 var match_elapsed: float = 0.0
+var result_reason := ""
 
 func _ready():
     var config = ConfigFile.new()
@@ -126,19 +127,22 @@ func _spawn_loot():
         Vector3(2, 0, -32), Vector3(-8, 0, 35),
         Vector3(30, 0, 30), Vector3(-30, 0, 2),
         Vector3(10, 0, 42), Vector3(-12, 0, -42),
-        Vector3(0, 0, 5), Vector3(22, 0, -35)
+        Vector3(0, 0, 5), Vector3(22, 0, -35),
+        Vector3(-42, 0, 28), Vector3(42, 0, 22),
+        Vector3(-8, 0, 48), Vector3(8, 0, -48),
+        Vector3(36, 0, -28), Vector3(-36, 0, -30)
     ]
     var spawner = get_parent().get("player_spawner")
     if spawner == null:
         push_warning("ZORIX: MultiplayerSpawner unavailable; loot not spawned.")
         return
     for index in range(points.size()):
-        var kind = "medkit" if index % 4 == 0 else ("weapon" if index % 5 == 0 else "ammo")
+        var kind = "medkit" if index % 5 == 0 else ("weapon" if index % 3 == 0 else "ammo")
         spawner.spawn({
             "entity_type": "loot",
             "pickup_kind": kind,
-            "amount": 50 if kind == "ammo" else 35,
-            "weapon_index": 1 + (index % 3),
+            "amount": 60 if kind == "ammo" else 35,
+            "weapon_index": 1 + (index % 7),
             "loot_id": index,
             "spawn_position": points[index]
         })
@@ -234,6 +238,7 @@ func _finish_match(winner_team_id: int, reason: String):
     if match_finished or not multiplayer.is_server():
         return
     match_finished = true
+    result_reason = reason
     print("ZORIX MATCH RESULT | winner_team=%d | reason=%s" % [winner_team_id, reason])
     show_match_result.rpc(winner_team_id, reason)
 
@@ -243,13 +248,14 @@ func show_match_result(winner_team_id: int, reason: String):
     layer.name = "MatchResultOverlay"
     layer.layer = 30
     var shade := ColorRect.new()
-    shade.color = Color(0.015, 0.035, 0.055, 0.88)
+    shade.color = Color(0.015, 0.035, 0.055, 0.90)
     shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     layer.add_child(shade)
+
     var panel := PanelContainer.new()
     panel.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
-    panel.position = Vector2(-190, -125)
-    panel.size = Vector2(380, 250)
+    panel.position = Vector2(-225, -285)
+    panel.size = Vector2(450, 570)
     var style := StyleBoxFlat.new()
     style.bg_color = Color("#102b38")
     style.border_color = Color("#53d6c1")
@@ -257,29 +263,77 @@ func show_match_result(winner_team_id: int, reason: String):
     style.set_corner_radius_all(18)
     panel.add_theme_stylebox_override("panel", style)
     var column := VBoxContainer.new()
-    column.alignment = BoxContainer.ALIGNMENT_CENTER
+    column.add_theme_constant_override("separation", 8)
     panel.add_child(column)
+
     var heading := Label.new()
     heading.text = "MATCH COMPLETE"
     heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    heading.add_theme_font_size_override("font_size", 27)
+    heading.add_theme_font_size_override("font_size", 26)
     heading.add_theme_color_override("font_color", Color("#ffe08a"))
     column.add_child(heading)
-    var result := Label.new()
+
     var local_player = get_tree().get_first_node_in_group("local_player")
     var local_team := int(local_player.team_id) if local_player != null else -99
+    var result := Label.new()
     result.text = "VICTORY" if winner_team_id == local_team else ("DRAW" if winner_team_id < 0 else "DEFEAT")
     result.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    result.add_theme_font_size_override("font_size", 34)
+    result.add_theme_font_size_override("font_size", 32)
     result.add_theme_color_override("font_color", Color("#ffffff"))
     column.add_child(result)
+
     var details := Label.new()
-    details.text = "%s\\nTeam %d\\nKills: %d  |  Deaths: %d" % [reason, winner_team_id, int(local_player.kills) if local_player != null else 0, int(local_player.deaths) if local_player != null else 0]
+    details.text = "%s  •  TEAM %d  •  TIME %s" % [reason, winner_team_id, _format_match_time(match_elapsed)]
     details.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    details.add_theme_font_size_override("font_size", 16)
+    details.add_theme_font_size_override("font_size", 13)
+    details.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     column.add_child(details)
+
+    var header := Label.new()
+    header.text = "RANK     PLAYER                 TEAM      KILLS    STATUS"
+    header.add_theme_font_size_override("font_size", 11)
+    header.add_theme_color_override("font_color", Color("#62d6c6"))
+    column.add_child(header)
+
+    var scroll := ScrollContainer.new()
+    scroll.custom_minimum_size = Vector2(410, 350)
+    scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    var rows := VBoxContainer.new()
+    rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    scroll.add_child(rows)
+    var players := get_tree().get_nodes_in_group("player")
+    players.sort_custom(func(a, b):
+        if a.is_dead != b.is_dead:
+            return not a.is_dead
+        if a.kills != b.kills:
+            return a.kills > b.kills
+        return a.deaths < b.deaths
+    )
+    var rank := 1
+    for entry in players:
+        if not is_instance_valid(entry):
+            continue
+        var row := Label.new()
+        var player_name := str(entry.name).replace("Player_", "P")
+        var state := "ELIMINATED" if entry.is_dead else ("DOWNED" if entry.is_downed else "ALIVE")
+        row.text = "%02d       %-20s T%-3d       %-3d      %s" % [rank, player_name, int(entry.team_id), int(entry.kills), state]
+        row.add_theme_font_size_override("font_size", 12)
+        row.add_theme_color_override("font_color", Color("#ffffff") if not entry.is_dead else Color("#91a4aa"))
+        rows.add_child(row)
+        rank += 1
+    column.add_child(scroll)
+
+    var personal := Label.new()
+    personal.text = "YOUR STATS  •  KILLS %d  •  DEATHS %d" % [int(local_player.kills) if local_player != null else 0, int(local_player.deaths) if local_player != null else 0]
+    personal.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    personal.add_theme_color_override("font_color", Color("#ffe08a"))
+    column.add_child(personal)
     get_tree().current_scene.add_child(layer)
     layer.add_child(panel)
+
+func _format_match_time(seconds: float) -> String:
+    var total := maxi(0, int(seconds))
+    return "%02d:%02d" % [total / 60, total % 60]
 
 
 func _evaluate_tactical_elimination_result():
