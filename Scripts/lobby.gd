@@ -1,7 +1,9 @@
 extends Control
 
 const MATCH_SCENE := "res://Scenes/Main.tscn"
-const PLAYER_ACCOUNT := preload("res://Scripts/player_account.gd")\nconst PROGRESSION_UI := preload("res://Scripts/progression_ui.gd")
+const PLAYER_ACCOUNT := preload("res://Scripts/player_account.gd")
+const STORE_UI := preload("res://Scripts/store_ui.gd")
+const PROGRESSION_UI := preload("res://Scripts/progression_ui.gd")
 const SETTINGS_PATH := "user://zorix_settings.cfg"
 const DEFAULT_PORT := 24560
 const MAX_PLAYERS := 50
@@ -145,6 +147,10 @@ func _build_lobby():
     margin.add_child(content)
 
     _add_hero_showcase()
+
+    var store_button := _make_button("✦  OPEN PREMIUM STORE  •  WEAPON / BUNDLE / CAR SKINS", Color("#815d24"))
+    store_button.pressed.connect(_open_store)
+    content.add_child(store_button)
 
     var eyebrow = Label.new()
     eyebrow.text = "DUAL COMBAT MODES • MOBILE OPTIMIZED"
@@ -370,6 +376,14 @@ func _add_hero_showcase() -> void:
     caption.add_theme_font_size_override("font_size", 12)
     caption.add_theme_color_override("font_color", Color("#e8d5a8"))
     content.add_child(caption)
+
+func _open_store() -> void:
+    if content == null:
+        return
+    content.visible = false
+    var store := STORE_UI.new()
+    add_child(store)
+    store.closed.connect(func(): content.visible = true)
 
 func _add_section(text_value: String):
     var label = Label.new()
