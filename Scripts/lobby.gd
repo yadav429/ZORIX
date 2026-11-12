@@ -143,6 +143,8 @@ func _build_lobby():
     content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     margin.add_child(content)
 
+    _add_hero_showcase()
+
     var eyebrow = Label.new()
     eyebrow.text = "DUAL COMBAT MODES • MOBILE OPTIMIZED"
     eyebrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -261,6 +263,120 @@ func _build_lobby():
     footer.add_theme_font_size_override("font_size", 11)
     footer.add_theme_color_override("font_color", Color("#78949c"))
     content.add_child(footer)
+
+
+func _add_hero_showcase() -> void:
+    var hero_title := Label.new()
+    hero_title.text = "YOUR BATTLEFIELD. YOUR LEGEND."
+    hero_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    hero_title.add_theme_font_size_override("font_size", 18)
+    hero_title.add_theme_color_override("font_color", Color("#f0c477"))
+    content.add_child(hero_title)
+
+    var hero_subtitle := Label.new()
+    hero_subtitle.text = "INDIAN ELITE COMMANDO  •  LIVE 3D PREVIEW"
+    hero_subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    hero_subtitle.add_theme_font_size_override("font_size", 11)
+    hero_subtitle.add_theme_color_override("font_color", Color("#9fc5bd"))
+    content.add_child(hero_subtitle)
+
+    var preview_frame := PanelContainer.new()
+    preview_frame.custom_minimum_size = Vector2(0, 285)
+    preview_frame.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    preview_frame.add_theme_stylebox_override("panel", _panel_style(Color("#09151b"), Color("#b58a45")))
+    content.add_child(preview_frame)
+
+    var preview_margin := MarginContainer.new()
+    preview_margin.add_theme_constant_override("margin_left", 5)
+    preview_margin.add_theme_constant_override("margin_right", 5)
+    preview_margin.add_theme_constant_override("margin_top", 5)
+    preview_margin.add_theme_constant_override("margin_bottom", 5)
+    preview_frame.add_child(preview_margin)
+
+    var viewport_container := SubViewportContainer.new()
+    viewport_container.custom_minimum_size = Vector2(0, 270)
+    viewport_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    viewport_container.stretch = true
+    preview_margin.add_child(viewport_container)
+
+    var viewport := SubViewport.new()
+    viewport.size = Vector2i(720, 480)
+    viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+    viewport.handle_input_locally = false
+    viewport_container.add_child(viewport)
+
+    var world := World3D.new()
+    viewport.world_3d = world
+    var environment := Environment.new()
+    environment.background_mode = Environment.BG_COLOR
+    environment.background_color = Color("#101f25")
+    environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+    environment.ambient_light_color = Color("#8aa99a")
+    environment.ambient_light_energy = 0.55
+    environment.tonemap_mode = Environment.TONE_MAPPER_FILMIC
+    world.environment = environment
+
+    var stage := Node3D.new()
+    stage.name = "LobbyStage"
+    viewport.add_child(stage)
+
+    var camera := Camera3D.new()
+    camera.position = Vector3(3.0, 2.25, 5.8)
+    camera.fov = 38.0
+    camera.current = true
+    stage.add_child(camera)
+    camera.look_at(Vector3(0.0, 1.22, 0.0), Vector3.UP)
+
+    var key_light := DirectionalLight3D.new()
+    key_light.rotation_degrees = Vector3(-38.0, -28.0, 0.0)
+    key_light.light_energy = 1.45
+    key_light.shadow_enabled = true
+    stage.add_child(key_light)
+
+    var fill_light := OmniLight3D.new()
+    fill_light.position = Vector3(-2.5, 2.6, 2.0)
+    fill_light.light_color = Color("#6bb9b2")
+    fill_light.light_energy = 1.1
+    fill_light.omni_range = 8.0
+    stage.add_child(fill_light)
+
+    var floor := MeshInstance3D.new()
+    var floor_mesh := PlaneMesh.new()
+    floor_mesh.size = Vector2(14.0, 14.0)
+    floor.mesh = floor_mesh
+    floor.position.y = -0.035
+    var floor_material := StandardMaterial3D.new()
+    floor_material.albedo_color = Color("#182b2b")
+    floor_material.roughness = 0.94
+    floor.material_override = floor_material
+    stage.add_child(floor)
+
+    var platform := MeshInstance3D.new()
+    var platform_mesh := CylinderMesh.new()
+    platform_mesh.top_radius = 1.05
+    platform_mesh.bottom_radius = 1.12
+    platform_mesh.height = 0.12
+    platform.mesh = platform_mesh
+    platform.position.y = 0.04
+    var platform_material := StandardMaterial3D.new()
+    platform_material.albedo_color = Color("#344a43")
+    platform_material.metallic = 0.35
+    platform_material.roughness = 0.48
+    platform.material_override = platform_material
+    stage.add_child(platform)
+
+    var character_scene: PackedScene = load("res://Scenes/LobbyCharacter.tscn")
+    if character_scene != null:
+        var character := character_scene.instantiate()
+        character.position.y = 0.12
+        stage.add_child(character)
+
+    var caption := Label.new()
+    caption.text = "COMMANDO 01   |   VEER CLASS"
+    caption.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    caption.add_theme_font_size_override("font_size", 12)
+    caption.add_theme_color_override("font_color", Color("#e8d5a8"))
+    content.add_child(caption)
 
 func _add_section(text_value: String):
     var label = Label.new()
