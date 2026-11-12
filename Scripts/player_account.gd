@@ -179,14 +179,18 @@ func _on_request_completed(result: int, code: int, _headers: PackedStringArray, 
         status_label.text = str(parsed.get("detail", "Login failed")) if parsed is Dictionary else "Request failed."
         return
     if request_kind == "lobby":
-        if parsed is Dictionary:
-            var servers: Array = parsed.get("servers", [])
-            if servers.is_empty():
-                status_label.text = "Login successful: " + player_name + " • Lobby ready"
-            else:
-                status_label.text = "Login successful: " + player_name + " • " + str(servers.size()) + " server(s) available"
+        var servers: Array = parsed.get("servers", []) if parsed is Dictionary else []
+        if servers.is_empty():
+            status_label.text = "Login successful: " + player_name + " • No public game server is online yet."
         else:
-            status_label.text = "Login successful: " + player_name + " • Lobby response received"
+            var server: Dictionary = servers[0]
+            var host := str(server.get("host", ""))
+            var port := int(server.get("port", 24560))
+            if not host.is_empty():
+                status_label.text = "Login successful: " + player_name + " • Public server available."
+                public_server_loaded.emit(host, port)
+            else:
+                status_label.text = "Account ready, but public server address is missing."
         login_completed.emit(player_name)
         return
     if not parsed is Dictionary or not parsed.has("token"):
