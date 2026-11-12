@@ -9,24 +9,24 @@ func _material(color: Color, metallic: float = 0.0, roughness: float = 0.82) -> 
     material.roughness = roughness
     return material
 
-func _box(parent: Node3D, size: Vector3, at: Vector3, color: Color, material_override: Material = null) -> MeshInstance3D:
+func _box(parent: Node3D, size: Vector3, at: Vector3, material_override: Material) -> MeshInstance3D:
     var mesh_instance := MeshInstance3D.new()
     var mesh := BoxMesh.new()
     mesh.size = size
     mesh_instance.mesh = mesh
     mesh_instance.position = at
-    mesh_instance.material_override = material_override if material_override != null else _material(color)
+    mesh_instance.material_override = material_override
     parent.add_child(mesh_instance)
     return mesh_instance
 
-func _capsule(parent: Node3D, radius: float, height: float, at: Vector3, color: Color) -> MeshInstance3D:
+func _capsule(parent: Node3D, radius: float, height: float, at: Vector3, material_override: Material) -> MeshInstance3D:
     var mesh_instance := MeshInstance3D.new()
     var mesh := CapsuleMesh.new()
     mesh.radius = radius
     mesh.height = height
     mesh_instance.mesh = mesh
     mesh_instance.position = at
-    mesh_instance.material_override = _material(color)
+    mesh_instance.material_override = material_override
     parent.add_child(mesh_instance)
     return mesh_instance
 
