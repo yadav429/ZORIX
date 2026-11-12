@@ -145,7 +145,7 @@ func _ready():
     root.add_child(status_label)
 
     inventory_label = Label.new()
-    inventory_label.text = "GUNS: RIFLE"
+    inventory_label.text = "GUNS: VEER-47"
     inventory_label.position = Vector2(18, 66)
     inventory_label.add_theme_font_size_override("font_size", 12)
     inventory_label.add_theme_color_override("font_color", Color("#ffe08a"))
