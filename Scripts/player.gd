@@ -29,6 +29,7 @@ var current_weapon_index: int = 0
 var downed_by_peer_id: int = 0
 var revive_target = null
 var revive_progress: float = 0.0
+var is_reviving: bool = false
 var weapon_switch_cooldown: float = 0.0
 var last_model_weapon_index := -1
 const WEAPON_DATA := [
@@ -80,6 +81,8 @@ func _ready():
     health_replication.add_property(NodePath(".:is_dead"))
     health_replication.add_property(NodePath(".:is_downed"))
     health_replication.add_property(NodePath(".:downed_timer"))
+    health_replication.add_property(NodePath(".:revive_progress"))
+    health_replication.add_property(NodePath(".:is_reviving"))
     health_replication.add_property(NodePath(".:team_id"))
     health_replication.add_property(NodePath(".:kills"))
     health_replication.add_property(NodePath(".:deaths"))
@@ -350,6 +353,7 @@ func _server_revive_nearby(reviver_peer_id: int):
     if closest != null:
         revive_target = closest
         revive_progress = 0.0
+        is_reviving = true
         print("ZORIX REVIVE STARTED | target=%s | reviver=%d" % [closest.name, reviver_peer_id])
 
 func _begin_revive(reviver_peer_id: int):
@@ -529,12 +533,14 @@ func _physics_process(delta):
         if not is_instance_valid(revive_target) or not revive_target.is_downed or revive_target.is_dead or is_dead or is_downed or team_id != revive_target.team_id or global_position.distance_to(revive_target.global_position) > 3.2:
             revive_target = null
             revive_progress = 0.0
+            is_reviving = false
         else:
             revive_progress += delta
             if revive_progress >= 4.0:
                 revive_target.call("_begin_revive", get_multiplayer_authority())
                 revive_target = null
                 revive_progress = 0.0
+                is_reviving = false
 
     if multiplayer.is_server():
         var input_dir := server_move_input

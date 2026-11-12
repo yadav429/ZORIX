@@ -5,6 +5,7 @@ extends Area3D
 @export var weapon_index: int = 1
 
 func _ready():
+    add_to_group("loot_pickups")
     collision_layer = 0
     collision_mask = 1
     monitoring = true
