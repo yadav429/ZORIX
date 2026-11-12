@@ -5,6 +5,7 @@ extends Area3D
 @export var weapon_index: int = 1
 
 func _ready():
+    add_to_group("loot_pickups")
     collision_layer = 0
     collision_mask = 1
     monitoring = true
@@ -35,6 +36,13 @@ func _ready():
     visual.material_override = mat
     visual.position.y = 0.55
     add_child(visual)
+
+    var label := Label3D.new()
+    label.text = "WEAPON" if pickup_kind == "weapon" else ("MEDKIT" if pickup_kind == "medkit" else "AMMO")
+    label.position.y = 1.25
+    label.font_size = 28
+    label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+    add_child(label)
 
     body_entered.connect(_on_body_entered)
 
