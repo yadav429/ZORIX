@@ -26,6 +26,7 @@ var selected_mode := "Squad"
 var selected_team_size := 4
 var selected_game_mode := "battle_royale"
 var player_account: Node
+var login_overlay: Control
 
 func _ready():
     if not ServerFleetAgent.join_validation_received.is_connected(_on_join_ticket_validated):
@@ -152,6 +153,7 @@ func _build_lobby():
     content.add_theme_constant_override("separation", 11)
     content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     margin.add_child(content)
+    content.visible = false
 
     _add_hero_showcase()
 
@@ -179,12 +181,6 @@ func _build_lobby():
     map_title.add_theme_color_override("font_color", Color("#f0c477"))
     content.add_child(map_title)
 
-    player_account = Node.new()
-    player_account.name = "PlayerAccount"
-    player_account.set_script(PLAYER_ACCOUNT)
-    add_child(player_account)
-    player_account.call("build_ui", content)
-    player_account.connect("public_server_loaded", _on_public_server_loaded)
 
     _add_section("1  CHOOSE YOUR GAME")
     var br_button = _make_button("BATTLE ROYALE  •  50 PLAYERS", Color("#167c70"))
@@ -281,6 +277,129 @@ func _build_lobby():
     footer.add_theme_font_size_override("font_size", 11)
     footer.add_theme_color_override("font_color", Color("#78949c"))
     content.add_child(footer)
+
+    player_account = Node.new()
+    player_account.name = "PlayerAccount"
+    player_account.set_script(PLAYER_ACCOUNT)
+    add_child(player_account)
+    var login_content := _build_login_content()
+    player_account.call("build_ui", login_content)
+    player_account.set_meta("login_content", login_content)
+    player_account.connect("public_server_loaded", _on_public_server_loaded)
+    player_account.connect("login_completed", _on_login_completed)
+    _build_login_screen()
+
+
+func _build_login_content() -> VBoxContainer:
+    var login_content := VBoxContainer.new()
+    login_content.add_theme_constant_override("separation", 14)
+    login_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    return login_content
+
+
+func _build_login_screen() -> void:
+    login_overlay = Control.new()
+    login_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    login_overlay.z_index = 20
+    add_child(login_overlay)
+
+    var backdrop := ColorRect.new()
+    backdrop.color = Color("#061018")
+    backdrop.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    login_overlay.add_child(backdrop)
+
+    var top_glow := ColorRect.new()
+    top_glow.color = Color("#102b35")
+    top_glow.anchor_left = 0.0
+    top_glow.anchor_right = 1.0
+    top_glow.anchor_top = 0.0
+    top_glow.anchor_bottom = 0.48
+    top_glow.offset_bottom = 0.0
+    login_overlay.add_child(top_glow)
+
+    var scroll := ScrollContainer.new()
+    scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    scroll.offset_left = 18
+    scroll.offset_right = -18
+    scroll.offset_top = 18
+    scroll.offset_bottom = -18
+    login_overlay.add_child(scroll)
+
+    var center := CenterContainer.new()
+    center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    center.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    scroll.add_child(center)
+
+    var card := PanelContainer.new()
+    card.custom_minimum_size = Vector2(0, 500)
+    card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    card.add_theme_stylebox_override("panel", _panel_style(Color("#101e29"), Color("#b58a45")))
+    center.add_child(card)
+
+    var margin := MarginContainer.new()
+    margin.add_theme_constant_override("margin_left", 22)
+    margin.add_theme_constant_override("margin_right", 22)
+    margin.add_theme_constant_override("margin_top", 26)
+    margin.add_theme_constant_override("margin_bottom", 22)
+    card.add_child(margin)
+
+    var stack := VBoxContainer.new()
+    stack.add_theme_constant_override("separation", 12)
+    stack.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    margin.add_child(stack)
+
+    var top_line := Label.new()
+    top_line.text = "INDIA'S BATTLE ARENA"
+    top_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    top_line.add_theme_font_size_override("font_size", 12)
+    top_line.add_theme_color_override("font_color", Color("#62d6c6"))
+    stack.add_child(top_line)
+
+    var logo := Label.new()
+    logo.text = "Z O R I X"
+    logo.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    logo.add_theme_font_size_override("font_size", 48)
+    logo.add_theme_color_override("font_color", Color("#f3f7f4"))
+    stack.add_child(logo)
+
+    var tagline := Label.new()
+    tagline.text = "DROP IN • FIGHT HARD • BE THE LAST ONE"
+    tagline.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    tagline.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    tagline.add_theme_font_size_override("font_size", 11)
+    tagline.add_theme_color_override("font_color", Color("#f0c477"))
+    stack.add_child(tagline)
+
+    var separator := HSeparator.new()
+    stack.add_child(separator)
+
+    var login_host := VBoxContainer.new()
+    login_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    stack.add_child(login_host)
+    for child in _get_login_content_children():
+        login_host.add_child(child)
+
+    var footer := Label.new()
+    footer.text = "SECURE ACCOUNT • FREE TO PLAY"
+    footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    footer.add_theme_font_size_override("font_size", 10)
+    footer.add_theme_color_override("font_color", Color("#78949c"))
+    stack.add_child(footer)
+
+
+func _get_login_content_children() -> Array:
+    var result: Array = []
+    for child in player_account.get_meta("login_content").get_children():
+        result.append(child)
+    return result
+
+
+func _on_login_completed(_player_name: String) -> void:
+    if login_overlay != null:
+        login_overlay.queue_free()
+        login_overlay = null
+    if content != null:
+        content.visible = true
 
 
 func _add_hero_showcase() -> void:
