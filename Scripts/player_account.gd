@@ -4,7 +4,7 @@ signal login_completed(player_name: String)
 signal public_server_loaded(host: String, port: int)
 
 const SETTINGS_PATH := "user://zorix_account.cfg"
-const GOOGLE_WEB_CLIENT_ID := "12896414115-g4950lhr34mbcpugje8ga9kq8uufpl5b.apps.googleusercontent.com"
+const GOOGLE_WEB_CLIENT_ID := "12896414115-g4950lhr34mbcpugje8ga9kq8uufplb5.apps.googleusercontent.com"
 var request: HTTPRequest
 var api_url_input: LineEdit
 var status_label: Label
