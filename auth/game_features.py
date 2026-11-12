@@ -40,6 +40,24 @@ def install_game_feature_routes(app, db_factory, current_player):
         CREATE TABLE IF NOT EXISTS skin_catalog (skin_id TEXT PRIMARY KEY, name TEXT NOT NULL, weapon TEXT NOT NULL, rarity TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS player_inventory (player_id INTEGER NOT NULL, skin_id TEXT NOT NULL, acquired_at INTEGER NOT NULL, PRIMARY KEY(player_id, skin_id));
         CREATE TABLE IF NOT EXISTS equipped_skins (player_id INTEGER NOT NULL, weapon TEXT NOT NULL, skin_id TEXT NOT NULL, PRIMARY KEY(player_id, weapon));
+        CREATE TABLE IF NOT EXISTS player_progression (
+            player_id INTEGER PRIMARY KEY, level INTEGER NOT NULL DEFAULT 1, exp INTEGER NOT NULL DEFAULT 0,
+            coins INTEGER NOT NULL DEFAULT 0, red_diamonds INTEGER NOT NULL DEFAULT 0,
+            pink_diamonds INTEGER NOT NULL DEFAULT 0, black_diamonds INTEGER NOT NULL DEFAULT 0,
+            rank_points INTEGER NOT NULL DEFAULT 0, prime_level INTEGER NOT NULL DEFAULT 0,
+            prime_exp INTEGER NOT NULL DEFAULT 0, prime_month_claim TEXT NOT NULL DEFAULT ''
+        );
+        CREATE TABLE IF NOT EXISTS progression_events (
+            event_id TEXT PRIMARY KEY, player_id INTEGER NOT NULL, created_at INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS store_catalog (
+            item_id TEXT PRIMARY KEY, name TEXT NOT NULL, category TEXT NOT NULL,
+            rarity TEXT NOT NULL, currency TEXT NOT NULL, price INTEGER NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS store_purchases (
+            player_id INTEGER NOT NULL, item_id TEXT NOT NULL, purchased_at INTEGER NOT NULL,
+            PRIMARY KEY(player_id, item_id)
+        );
         """)
         con.executemany("INSERT OR IGNORE INTO skin_catalog VALUES(?,?,?,?)", [
             ("starter_rifle","Frontier","Rifle","Common"),("starter_smg","Pulse","SMG","Common"),
@@ -211,16 +229,158 @@ def install_game_feature_routes(app, db_factory, current_player):
             con.commit(); return {"ok":True,"equipped":body.skin_id,"weapon":row["weapon"]}
         finally: con.close()
 
+    RANKS = [
+        ("Bronze", 0), ("Silver", 300), ("Gold", 700), ("Platinum", 1200),
+        ("Diamond", 1800), ("Heroic", 2600), ("Master", 3600), ("Grandmaster", 5000)
+    ]
+    def rank_for(points):
+        current = RANKS[0][0]
+        for name, threshold in RANKS:
+            if points >= threshold: current = name
+        return current
+    def level_xp_needed(level):
+        return level * 500
+    def prime_xp_needed(level):
+        return level * 600
+    def grant_level_reward(con, pid, level):
+        if level <= 20:
+            con.execute("UPDATE player_progression SET red_diamonds=red_diamonds+200 WHERE player_id=?", (pid,))
+            return {"type":"red_diamonds","amount":200}
+        if level <= 50:
+            con.execute("UPDATE player_progression SET pink_diamonds=pink_diamonds+500 WHERE player_id=?", (pid,))
+            return {"type":"pink_diamonds","amount":500}
+        con.execute("UPDATE player_progression SET black_diamonds=black_diamonds+900 WHERE player_id=?", (pid,))
+        return {"type":"black_diamonds","amount":900}
+    def prime_level_gift(con, pid, level):
+        coins = level * 500
+        con.execute("UPDATE player_progression SET coins=coins+? WHERE player_id=?", (coins,pid))
+        gift = {"type":"coins","amount":coins}
+        if level in (2, 4):
+            con.execute("UPDATE player_progression SET red_diamonds=red_diamonds+100 WHERE player_id=?", (pid,))
+            gift = {"type":"red_diamonds","amount":100,"bonus_coins":coins}
+        elif level in (6, 8):
+            con.execute("UPDATE player_progression SET pink_diamonds=pink_diamonds+100 WHERE player_id=?", (pid,))
+            gift = {"type":"pink_diamonds","amount":100,"bonus_coins":coins}
+        elif level == 10:
+            con.execute("UPDATE player_progression SET black_diamonds=black_diamonds+300 WHERE player_id=?", (pid,))
+            gift = {"type":"black_diamonds","amount":300,"bonus_coins":coins}
+        return gift
+    def ensure_progression(con, pid):
+        con.execute("INSERT OR IGNORE INTO player_progression(player_id) VALUES(?)", (pid,))
+
+    @router.get("/progression")
+    def get_progression(player=Depends(current_player)):
+        con=connection()
+        try:
+            ensure_player(con,player); ensure_progression(con,player["id"])
+            row=dict(con.execute("SELECT * FROM player_progression WHERE player_id=?", (player["id"],)).fetchone())
+            stats=con.execute("SELECT wins,kills,matches FROM player_stats WHERE player_id=?", (player["id"],)).fetchone()
+            row["rank"]=rank_for(row["rank_points"])
+            row["next_level_exp"]=level_xp_needed(row["level"]) if row["level"] < 100 else 0
+            row["next_prime_exp"]=prime_xp_needed(row["prime_level"]+1) if row["prime_level"] < 10 else 0
+            row["rank_ladder"]=[{"name":n,"min_points":p} for n,p in RANKS]
+            row["stats"]=dict(stats) if stats else {}
+            return {"progression":row}
+        finally: con.close()
+
+    @router.post("/prime/claim-monthly")
+    def claim_prime_monthly(player=Depends(current_player)):
+        con=connection()
+        try:
+            ensure_progression(con,player["id"])
+            month=time.strftime("%Y-%m",time.gmtime())
+            con.execute("BEGIN IMMEDIATE")
+            row=con.execute("SELECT prime_level,prime_month_claim FROM player_progression WHERE player_id=?", (player["id"],)).fetchone()
+            if int(row["prime_level"]) < 10:
+                raise HTTPException(403,"Prime Level 10 required for the monthly Black Diamond gift")
+            if row["prime_month_claim"] == month:
+                raise HTTPException(409,"This month's Prime reward has already been claimed")
+            con.execute("UPDATE player_progression SET black_diamonds=black_diamonds+900,prime_month_claim=? WHERE player_id=?", (month,player["id"]))
+            con.commit()
+            return {"ok":True,"reward":{"type":"black_diamonds","amount":900},"month":month}
+        except Exception:
+            con.rollback()
+            raise
+        finally: con.close()
+
+    @router.get("/store/catalog")
+    def store_catalog(player=Depends(current_player)):
+        con=connection()
+        try:
+            ensure_progression(con,player["id"])
+            wallet=dict(con.execute("SELECT coins,red_diamonds,pink_diamonds,black_diamonds FROM player_progression WHERE player_id=?", (player["id"],)).fetchone())
+            items=[dict(x) for x in con.execute("SELECT item_id,name,category,rarity,currency,price FROM store_catalog ORDER BY price,item_id").fetchall()]
+            owned={x["item_id"] for x in con.execute("SELECT item_id FROM store_purchases WHERE player_id=?", (player["id"],)).fetchall()}
+            for item in items: item["owned"]=item["item_id"] in owned
+            return {"wallet":wallet,"items":items}
+        finally: con.close()
+
+    @router.post("/store/purchase/{item_id}")
+    def purchase_store_item(item_id:str,player=Depends(current_player)):
+        con=connection()
+        try:
+            ensure_progression(con,player["id"])
+            con.execute("BEGIN IMMEDIATE")
+            item=con.execute("SELECT * FROM store_catalog WHERE item_id=?", (item_id,)).fetchone()
+            if item is None: raise HTTPException(404,"Store item not found")
+            if con.execute("SELECT 1 FROM store_purchases WHERE player_id=? AND item_id=?", (player["id"],item_id)).fetchone():
+                raise HTTPException(409,"Item already owned")
+            wallet_col={"red":"red_diamonds","pink":"pink_diamonds","black":"black_diamonds","coins":"coins"}.get(item["currency"])
+            if wallet_col is None: raise HTTPException(500,"Invalid store currency")
+            balance=con.execute("SELECT "+wallet_col+" FROM player_progression WHERE player_id=?", (player["id"],)).fetchone()[0]
+            if balance < item["price"]: raise HTTPException(402,"Not enough currency")
+            con.execute("UPDATE player_progression SET "+wallet_col+"="+wallet_col+"-? WHERE player_id=?", (item["price"],player["id"]))
+            con.execute("INSERT INTO store_purchases(player_id,item_id,purchased_at) VALUES(?,?,?)", (player["id"],item_id,int(time.time())))
+            con.commit()
+            return {"ok":True,"item_id":item_id,"currency":item["currency"],"spent":item["price"]}
+        except Exception:
+            con.rollback()
+            raise
+        finally: con.close()
+
     @router.post("/internal/match-result")
     def record_match_result(body:MatchResult,x_zorix_server_secret:Optional[str]=Header(default=None)):
         if not SERVER_SECRET or not x_zorix_server_secret or not secrets.compare_digest(SERVER_SECRET,x_zorix_server_secret):
             raise HTTPException(403,"Authoritative game server only")
         con=connection()
         try:
-            con.execute("INSERT OR IGNORE INTO player_stats(player_id) VALUES(?)",(body.player_id,))
-            delta=max(0,100-body.placement*2)+body.kills*5-25
+            con.execute("BEGIN IMMEDIATE")
+            ensure_progression(con,body.player_id)
+            event_id = getattr(body,"match_id",None) or secrets.token_hex(16)
+            inserted=con.execute("INSERT OR IGNORE INTO progression_events(event_id,player_id,created_at) VALUES(?,?,?)",(event_id,body.player_id,int(time.time())))
+            if inserted.rowcount == 0:
+                con.rollback()
+                return {"ok":True,"duplicate":True}
+            delta=max(-25,100-body.placement*2)+body.kills*5
+            delta=max(-25,delta)
+            rank_reward_coins=max(10,80-body.placement)+body.kills*8
+            match_exp=100+max(0,55-body.placement)*3+body.kills*20
+            prime_exp=15+max(0,25-body.placement)+body.kills*3
             con.execute("UPDATE player_stats SET rating=MAX(0,rating+?),wins=wins+?,kills=kills+?,matches=matches+1 WHERE player_id=?",(delta,1 if body.placement==1 else 0,body.kills,body.player_id))
-            con.commit(); return {"ok":True,"rating_delta":delta}
+            con.execute("UPDATE player_progression SET rank_points=MAX(0,rank_points+?),coins=coins+?,exp=exp+?,prime_exp=prime_exp+? WHERE player_id=?",(delta,rank_reward_coins,match_exp,prime_exp,body.player_id))
+            level_gifts=[]
+            while True:
+                row=con.execute("SELECT level,exp FROM player_progression WHERE player_id=?",(body.player_id,)).fetchone()
+                if row["level"] >= 100 or row["exp"] < level_xp_needed(row["level"]): break
+                next_level=row["level"]+1
+                con.execute("UPDATE player_progression SET exp=exp-?,level=? WHERE player_id=?",(level_xp_needed(row["level"]),next_level,body.player_id))
+                level_gifts.append({"level":next_level,"gift":grant_level_reward(con,body.player_id,next_level)})
+            prime_gifts=[]
+            while True:
+                row=con.execute("SELECT prime_level,prime_exp FROM player_progression WHERE player_id=?",(body.player_id,)).fetchone()
+                if row["prime_level"] >= 10 or row["prime_exp"] < prime_xp_needed(row["prime_level"]+1): break
+                next_prime=row["prime_level"]+1
+                con.execute("UPDATE player_progression SET prime_exp=prime_exp-?,prime_level=? WHERE player_id=?",(prime_xp_needed(next_prime),next_prime,body.player_id))
+                prime_gifts.append({"prime_level":next_prime,"gift":prime_level_gift(con,body.player_id,next_prime)})
+            current=con.execute("SELECT rank_points,level,prime_level FROM player_progression WHERE player_id=?",(body.player_id,)).fetchone()
+            con.commit()
+            return {"ok":True,"duplicate":False,"rank":rank_for(current["rank_points"]),"rank_points_delta":delta,
+                    "coins_earned":rank_reward_coins,"exp_earned":match_exp,"prime_exp_earned":prime_exp,
+                    "level_gifts":level_gifts,"prime_gifts":prime_gifts,
+                    "level":current["level"],"prime_level":current["prime_level"]}
+        except Exception:
+            con.rollback()
+            raise
         finally: con.close()
 
     app.include_router(router)

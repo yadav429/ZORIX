@@ -1,7 +1,7 @@
 extends Control
 
 const MATCH_SCENE := "res://Scenes/Main.tscn"
-const PLAYER_ACCOUNT := preload("res://Scripts/player_account.gd")
+const PLAYER_ACCOUNT := preload("res://Scripts/player_account.gd")\nconst PROGRESSION_UI := preload("res://Scripts/progression_ui.gd")
 const SETTINGS_PATH := "user://zorix_settings.cfg"
 const DEFAULT_PORT := 24560
 const MAX_PLAYERS := 50
