@@ -14,6 +14,11 @@ var graphics_picker: OptionButton
 var fps_picker: OptionButton
 var address_input: LineEdit
 var public_server_port := DEFAULT_PORT
+var matchmaking_request: HTTPRequest
+var matchmaking_timer: Timer
+var matchmaking_busy := false
+var join_ticket := ""
+var matchmaking_state := "idle"
 var mode_picker: OptionButton
 var graphics_quality := "balanced"
 var fps_limit := 60
@@ -23,6 +28,8 @@ var selected_game_mode := "battle_royale"
 var player_account: Node
 
 func _ready():
+    if not ServerFleetAgent.join_validation_received.is_connected(_on_join_ticket_validated):
+        ServerFleetAgent.join_validation_received.connect(_on_join_ticket_validated)
     multiplayer.peer_connected.connect(_on_peer_connected)
     multiplayer.peer_disconnected.connect(_on_peer_disconnected)
     multiplayer.connected_to_server.connect(_on_connected)
@@ -205,16 +212,29 @@ func _build_lobby():
     capacity.add_theme_color_override("font_color", Color("#b9cbd0"))
     content.add_child(capacity)
 
-    _add_section("3  CREATE OR JOIN ROOM")
-    address_input = LineEdit.new()
-    address_input.placeholder_text = "Host IP address (example: 123.45.67.89)"
-    address_input.custom_minimum_size.y = 48
-    address_input.clear_button_enabled = true
-    content.add_child(address_input)
+    _add_section("3  AUTOMATIC ONLINE MATCHMAKING")
+    matchmaking_request = HTTPRequest.new()
+    matchmaking_request.timeout = 18.0
+    add_child(matchmaking_request)
+    matchmaking_request.request_completed.connect(_on_matchmaking_request_completed)
+    matchmaking_timer = Timer.new()
+    matchmaking_timer.wait_time = 2.0
+    matchmaking_timer.timeout.connect(_poll_matchmaking)
+    add_child(matchmaking_timer)
 
-    var join_button = _make_button("JOIN ONLINE DEDICATED SERVER", Color("#167c70"))
-    join_button.pressed.connect(_join_room)
-    content.add_child(join_button)
+    var queue_button = _make_button("FIND MATCH  •  SOLO / DUO / SQUAD", Color("#167c70"))
+    queue_button.pressed.connect(_queue_for_matchmaking)
+    content.add_child(queue_button)
+
+    var cancel_queue_button = _make_button("CANCEL SEARCH", Color("#8a4b25"))
+    cancel_queue_button.pressed.connect(_cancel_matchmaking)
+    content.add_child(cancel_queue_button)
+    info_label = Label.new()
+    info_label.text = "Login, choose Solo/Duo/Squad and tap FIND MATCH."
+    info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    info_label.add_theme_color_override("font_color", Color("#f0c477"))
+    content.add_child(info_label)
 
     _add_section("4  GRAPHICS QUALITY")
     graphics_picker = OptionButton.new()
@@ -240,13 +260,12 @@ func _build_lobby():
     var panel = PanelContainer.new()
     panel.add_theme_stylebox_override("panel", _panel_style(Color("#172b36"), Color("#31505b")))
     content.add_child(panel)
-
-    info_label = Label.new()
-    info_label.text = "Online only: sign in and join a configured ZORIX dedicated server."
-    info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    info_label.add_theme_color_override("font_color", Color("#d8e5e6"))
-    panel.add_child(info_label)
+    var online_note = Label.new()
+    online_note.text = "Online-only matches use a registered ZORIX dedicated server and a verified one-time join ticket."
+    online_note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    online_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    online_note.add_theme_color_override("font_color", Color("#d8e5e6"))
+    panel.add_child(online_note)
 
     var note = Label.new()
     note.text = "Online matches require the public dedicated server to be deployed and registered in the account API."
@@ -435,26 +454,96 @@ func _on_mode_selected(index: int):
     if selected_game_mode == "battle_royale":
         info_label.text = selected_mode + " selected. Match capacity remains 50 players."
 
-func _join_room():
+func _queue_for_matchmaking():
+    if selected_game_mode != "battle_royale":
+        info_label.text = "Automatic queue is currently available for Battle Royale. Tactical 5v5 server allocation is next."
+        return
     if player_account == null or not bool(player_account.call("is_logged_in")):
-        info_label.text = "Please register/login before joining the public lobby."
+        info_label.text = "Google ya Guest se pehle login karein."
         return
-    var host = address_input.text.strip_edges()
-    if host.is_empty():
-        info_label.text = "Enter the host public IP address first."
+    if matchmaking_busy:
         return
-    var peer = ENetMultiplayerPeer.new()
-    var error = peer.create_client(host, public_server_port)
-    if error != OK:
-        info_label.text = "Could not connect: " + error_string(error)
-        return
-    multiplayer.multiplayer_peer = peer
-    info_label.text = "Connecting to public server " + host + ":" + str(public_server_port) + "..."
+    _save_settings()
+    matchmaking_state = "queue"
+    _send_matchmaking_request("/api/matchmaking/queue", HTTPClient.METHOD_POST, {"mode": selected_mode.to_lower()})
 
-func _on_public_server_loaded(host: String, port: int):
-    address_input.text = host
-    public_server_port = port
-    info_label.text = "Public dedicated server found at %s:%d. Tap JOIN ONLINE DEDICATED SERVER." % [host, port]
+func _cancel_matchmaking():
+    matchmaking_timer.stop()
+    if player_account == null or not bool(player_account.call("is_logged_in")):
+        matchmaking_state = "idle"
+        info_label.text = "Match search cancelled."
+        return
+    matchmaking_state = "cancel"
+    _send_matchmaking_request("/api/matchmaking/queue", HTTPClient.METHOD_DELETE, {})
+
+func _send_matchmaking_request(path: String, method: int, payload: Dictionary = {}):
+    if matchmaking_busy:
+        return
+    var token := str(player_account.call("get_session_token"))
+    var base := str(player_account.call("get_api_base_url")).trim_suffix("/")
+    if token.is_empty() or base.is_empty():
+        info_label.text = "Login session missing. Please login again."
+        return
+    matchmaking_busy = true
+    var headers := PackedStringArray(["Authorization: Bearer " + token, "Content-Type: application/json"])
+    var body := JSON.stringify(payload) if method in [HTTPClient.METHOD_POST, HTTPClient.METHOD_PUT, HTTPClient.METHOD_PATCH] and not payload.is_empty() else ""
+    var err := matchmaking_request.request(base + path, headers, method, body)
+    if err != OK:
+        matchmaking_busy = false
+        info_label.text = "Matchmaking request failed: " + error_string(err)
+
+func _poll_matchmaking():
+    if matchmaking_state != "searching" or matchmaking_busy:
+        return
+    _send_matchmaking_request("/api/matchmaking/status", HTTPClient.METHOD_GET)
+
+func _on_matchmaking_request_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray):
+    matchmaking_busy = false
+    var parsed = JSON.parse_string(body.get_string_from_utf8())
+    if result != HTTPRequest.RESULT_SUCCESS:
+        info_label.text = "Network issue. Searching will retry..."
+        return
+    if code < 200 or code >= 300:
+        info_label.text = str(parsed.get("detail", "Matchmaking failed")) if parsed is Dictionary else "Matchmaking failed."
+        matchmaking_timer.stop()
+        return
+    if not parsed is Dictionary:
+        info_label.text = "Invalid matchmaking response."
+        return
+    if matchmaking_state == "queue":
+        matchmaking_state = "searching"
+        info_label.text = "Searching %s match... Waiting for players and a healthy server." % selected_mode
+        matchmaking_timer.start()
+        _poll_matchmaking()
+        return
+    if matchmaking_state == "cancel":
+        matchmaking_state = "idle"
+        info_label.text = "Match search cancelled."
+        return
+    if parsed.get("status", "") == "allocated":
+        matchmaking_timer.stop()
+        join_ticket = str(parsed.get("join_ticket", ""))
+        var server: Dictionary = parsed.get("server", {})
+        var host := str(server.get("host", ""))
+        public_server_port = int(server.get("port", DEFAULT_PORT))
+        if host.is_empty() or join_ticket.is_empty():
+            info_label.text = "Match assigned, but server address or join ticket is missing."
+            return
+        var peer := ENetMultiplayerPeer.new()
+        var err := peer.create_client(host, public_server_port)
+        if err != OK:
+            info_label.text = "Server connection failed: " + error_string(err)
+            return
+        multiplayer.multiplayer_peer = peer
+        info_label.text = "Match found! Connecting to verified server..."
+    elif parsed.get("status", "") == "queued":
+        info_label.text = "Searching %s • Players waiting: %s" % [selected_mode, str(parsed.get("players_waiting", "…"))]
+    else:
+        info_label.text = "Waiting for the matchmaking queue..."
+
+func _on_public_server_loaded(_host: String, _port: int):
+    # Public server selection is intentionally replaced by automatic allocation.
+    pass
 
 func _on_peer_connected(_id: int):
     info_label.text = "Player connected. Current players: " + str(multiplayer.get_peers().size() + 1) + " / " + str(MAX_PLAYERS)
@@ -463,7 +552,19 @@ func _on_peer_disconnected(_id: int):
     info_label.text = "Player left. Current players: " + str(multiplayer.get_peers().size() + 1) + " / " + str(MAX_PLAYERS)
 
 func _on_connected():
-    info_label.text = "Connected! Loading online battlefield..."
+    if join_ticket.is_empty():
+        info_label.text = "Connected without a matchmaking ticket. Disconnecting."
+        multiplayer.multiplayer_peer.close()
+        return
+    ServerFleetAgent.submit_join_ticket(join_ticket)
+    info_label.text = "Server connected. Verifying your one-time join ticket..."
+
+func _on_join_ticket_validated(accepted: bool, message: String):
+    if not accepted:
+        info_label.text = "Server rejected the match ticket: " + message
+        join_ticket = ""
+        return
+    info_label.text = "Verified! Loading the online battlefield..."
     _start_online_match()
 
 func _start_online_match():
@@ -472,7 +573,8 @@ func _start_online_match():
         info_label.text = "Could not load online match scene: " + error_string(result)
 
 func _on_connection_failed():
-    info_label.text = "Online connection failed. Check the public server deployment and network, then retry."
+    info_label.text = "Online connection failed. Match search can be started again."
+    join_ticket = ""
 
 func _on_server_disconnected():
     info_label.text = "Disconnected from the online server. Reconnect when it is available."
