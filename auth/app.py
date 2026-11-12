@@ -181,10 +181,24 @@ def me(player=Depends(current_player)):
 @app.get("/api/lobby")
 def lobby(player=Depends(current_player)):
     servers = []
-    if GAME_HOST:
+    con = db()
+    try:
+        try:
+            rows = con.execute("""SELECT name,host,port,mode,max_players,active_players
+                FROM game_servers WHERE status='online' AND last_heartbeat>=?
+                ORDER BY active_players ASC, last_heartbeat DESC""",
+                (int(time.time()) - 45,)).fetchall()
+            servers = [dict(row) for row in rows]
+        except sqlite3.OperationalError:
+            # Server-fleet schema is created on the first server registration.
+            pass
+    finally:
+        con.close()
+    if not servers and GAME_HOST:
         servers.append({"name": "ZORIX Public Match", "host": GAME_HOST, "port": GAME_PORT,
                         "mode": GAME_MODE, "max_players": MAX_PLAYERS, "status": "configured"})
-    return {"player": player, "servers": servers, "message": "No public game server configured" if not servers else "Select a server"}
+    return {"player": player, "servers": servers,
+            "message": "No public game server configured" if not servers else "Public game server online"}
 
 
 # Bundled player social, matchmaking and progression API.
