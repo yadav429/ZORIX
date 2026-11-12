@@ -128,10 +128,10 @@ func _on_request_completed(result: int, code: int, _headers: PackedStringArray, 
         status_label.text = "Match rewards and level-up gifts are credited by the game server."
         _load_store()
     elif parsed.has("wallet") and parsed.has("items"):
-        wallet_label.text = "COINS %d  |  RED %d  |  PINK %d  |  BLACK %d" % [int(parsed.wallet.get("coins", 0)), int(parsed.wallet.get("red_diamonds", 0)), int(parsed.wallet.get("pink_diamonds", 0)), int(parsed.wallet.get("black_diamonds", 0))]
+        wallet_label.text = "COINS %d  |  RED %d  |  PINK %d  |  BLACK %d" % [int(parsed["wallet"].get("coins", 0)), int(parsed.wallet.get("red_diamonds", 0)), int(parsed.wallet.get("pink_diamonds", 0)), int(parsed.wallet.get("black_diamonds", 0))]
         for child in store_box.get_children():
             child.queue_free()
-        for item in parsed.items:
+        for item in parsed["items"]:
             var row := HBoxContainer.new()
             var label := Label.new()
             label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
