@@ -351,6 +351,11 @@ func _spawn_network_player(data: Variant) -> Node:
     player.set_multiplayer_authority(peer_id)
     player.set("team_id", int(data.get("team_id", peer_id - 1)))
     player.set("is_bot", bool(data.get("is_bot", false)))
+    if player.is_bot:
+        var brain := Node.new()
+        brain.name = "BotAI"
+        brain.set_script(load("res://Scripts/bot_ai.gd"))
+        player.add_child(brain)
     player.set("account_player_id", int(data.get("account_player_id", 0)))
     player.set("online_match_id", int(data.get("online_match_id", 0)))
     player.position = data.get("spawn_position", Vector3(0, 0, 25))

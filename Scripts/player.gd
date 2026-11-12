@@ -16,6 +16,7 @@ var health: int = 100
 var ammo: int = 30
 var reserve_ammo: int = 120
 var is_dead: bool = false
+var is_bot: bool = false
 var is_downed: bool = false
 var downed_timer: float = 0.0
 var team_id: int = -1
