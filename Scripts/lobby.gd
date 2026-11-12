@@ -11,6 +11,7 @@ var info_label: Label
 var graphics_picker: OptionButton
 var fps_picker: OptionButton
 var address_input: LineEdit
+var public_server_port := DEFAULT_PORT
 var mode_picker: OptionButton
 var graphics_quality := "balanced"
 var fps_limit := 60
@@ -205,17 +206,9 @@ func _build_lobby():
     address_input.clear_button_enabled = true
     content.add_child(address_input)
 
-    var host_button = _make_button("CREATE ROOM (HOST)", Color("#167c70"))
-    host_button.pressed.connect(_host_room)
-    content.add_child(host_button)
-
-    var join_button = _make_button("JOIN ROOM BY IP", Color("#254b61"))
+    var join_button = _make_button("JOIN ONLINE DEDICATED SERVER", Color("#167c70"))
     join_button.pressed.connect(_join_room)
     content.add_child(join_button)
-
-    var local_button = _make_button("PLAY OFFLINE TRAINING", Color("#354454"))
-    local_button.pressed.connect(_play_offline)
-    content.add_child(local_button)
 
     _add_section("4  GRAPHICS QUALITY")
     graphics_picker = OptionButton.new()
@@ -243,14 +236,14 @@ func _build_lobby():
     content.add_child(panel)
 
     info_label = Label.new()
-    info_label.text = "Choose Battle Royale or Tactical 5v5, then play offline or create/join a room."
+    info_label.text = "Online only: sign in and join a configured ZORIX dedicated server."
     info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     info_label.add_theme_color_override("font_color", Color("#d8e5e6"))
     panel.add_child(info_label)
 
     var note = Label.new()
-    note.text = "Online room networking is a prototype and needs a reachable game server. Supabase matchmaking setup is separate."
+    note.text = "Online matches require the public dedicated server to be deployed and registered in the account API."
     note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     note.add_theme_font_size_override("font_size", 11)
@@ -428,19 +421,6 @@ func _on_mode_selected(index: int):
     if selected_game_mode == "battle_royale":
         info_label.text = selected_mode + " selected. Match capacity remains 50 players."
 
-func _host_room():
-    if player_account == null or not bool(player_account.call("is_logged_in")):
-        info_label.text = "Please register/login before entering online rooms."
-        return
-    var peer = ENetMultiplayerPeer.new()
-    var error = peer.create_server(DEFAULT_PORT, MAX_PLAYERS - 1)
-    if error != OK:
-        info_label.text = "Room could not start: " + error_string(error) + ". Try another network or port."
-        return
-    multiplayer.multiplayer_peer = peer
-    info_label.text = "ROOM HOSTED. Loading online battlefield..."
-    _start_online_match()
-
 func _join_room():
     if player_account == null or not bool(player_account.call("is_logged_in")):
         info_label.text = "Please register/login before joining the public lobby."
@@ -450,23 +430,17 @@ func _join_room():
         info_label.text = "Enter the host public IP address first."
         return
     var peer = ENetMultiplayerPeer.new()
-    var error = peer.create_client(host, DEFAULT_PORT)
+    var error = peer.create_client(host, public_server_port)
     if error != OK:
         info_label.text = "Could not connect: " + error_string(error)
         return
     multiplayer.multiplayer_peer = peer
-    info_label.text = "Connecting to " + host + ":" + str(DEFAULT_PORT) + "..."
+    info_label.text = "Connecting to public server " + host + ":" + str(public_server_port) + "..."
 
 func _on_public_server_loaded(host: String, port: int):
     address_input.text = host
-    info_label.text = "Public server found at %s:%d. Tap JOIN ROOM BY IP when it is online." % [host, port]
-
-func _play_offline():
-    _save_settings()
-    multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-    var result = get_tree().change_scene_to_file(MATCH_SCENE)
-    if result != OK:
-        info_label.text = "Match scene could not load. Check Scenes/Main.tscn."
+    public_server_port = port
+    info_label.text = "Public dedicated server found at %s:%d. Tap JOIN ONLINE DEDICATED SERVER." % [host, port]
 
 func _on_peer_connected(_id: int):
     info_label.text = "Player connected. Current players: " + str(multiplayer.get_peers().size() + 1) + " / " + str(MAX_PLAYERS)
@@ -484,12 +458,10 @@ func _start_online_match():
         info_label.text = "Could not load online match scene: " + error_string(result)
 
 func _on_connection_failed():
-    multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-    info_label.text = "Connection failed. Check IP, server status and UDP port 24560."
+    info_label.text = "Online connection failed. Check the public server deployment and network, then retry."
 
 func _on_server_disconnected():
-    multiplayer.multiplayer_peer = OfflineMultiplayerPeer.new()
-    info_label.text = "Disconnected from room."
+    info_label.text = "Disconnected from the online server. Reconnect when it is available."
 
 func _on_graphics_quality_selected(index: int):
     graphics_quality = ["low", "balanced", "hd"][clampi(index, 0, 2)]
