@@ -170,6 +170,12 @@ func _build_lobby():
     player_account.call("build_ui", content)
     player_account.connect("public_server_loaded", _on_public_server_loaded)
 
+    var social_panel := Node.new()
+    social_panel.name = "SocialMatchmaking"
+    social_panel.set_script(load("res://Scripts/social_matchmaking.gd"))
+    add_child(social_panel)
+    social_panel.call("build_ui", content, player_account)
+
     _add_section("1  CHOOSE YOUR GAME")
     var br_button = _make_button("BATTLE ROYALE  •  50 PLAYERS", Color("#167c70"))
     br_button.pressed.connect(_select_battle_royale)
