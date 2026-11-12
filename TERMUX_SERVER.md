@@ -29,7 +29,7 @@ apt update
 apt install -y ca-certificates curl unzip libfontconfig1 libstdc++6 libgcc-s1
 mkdir -p /opt/zorix
 cd /opt/zorix
-git clone https://github.com/yadav429/ZORIX.git .
+git clone --branch feature/udp-dedicated-server-deploy https://github.com/yadav429/ZORIX.git .
 ```
 
 If the clone says the directory is not empty, use a fresh directory such as `/opt/zorix-src`.
