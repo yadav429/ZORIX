@@ -146,14 +146,17 @@ jobs:
             exit 1
           fi
 
-          # Install the official Godot Android source template directly.
-          # This avoids the headless editor installer silently exiting without
-          # creating the project-local android/build directory on CI runners.
+          # Reproduce Godot 4.7's Android template installer metadata.
+          # Godot checks android/.build_version before running Gradle export.
           mkdir -p android/build
           unzip -q "$ANDROID_SOURCE" -d android/build
+          printf '%s\n' '4.7.stable' > android/.build_version
+          : > android/build/.gdignore
+          test -s android/.build_version
           test -s android/build/build.gradle
           test -s android/build/settings.gradle
           echo "Installed Android Gradle template from: $ANDROID_SOURCE"
+          echo "Template identifier: $(cat android/.build_version)"
           find android/build -maxdepth 2 -type f | sort | head -100
 
       - name: Import project and load Android plugin
