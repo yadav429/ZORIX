@@ -351,6 +351,8 @@ func _spawn_network_player(data: Variant) -> Node:
     player.set_multiplayer_authority(peer_id)
     player.set("team_id", int(data.get("team_id", peer_id - 1)))
     player.set("is_bot", bool(data.get("is_bot", false)))
+    player.set("account_player_id", int(data.get("account_player_id", 0)))
+    player.set("online_match_id", int(data.get("online_match_id", 0)))
     player.position = data.get("spawn_position", Vector3(0, 0, 25))
     return player
 
@@ -406,22 +408,32 @@ func _fill_match_with_bots() -> void:
     print("ZORIX BOT FILL COMPLETE | humans=%d | bots=%d | total=50" % [humans, bot_index])
 
 func _on_network_peer_connected(peer_id: int):
+    # Do not spawn on socket connect. The signed ticket must be validated first.
+    if multiplayer.is_server():
+        print("ZORIX ENET PEER CONNECTED; WAITING FOR SIGNED TICKET | peer=%d" % peer_id)
+
+func _on_peer_authenticated(peer_id: int, player_id: int, match_id: int, team_number: int, mode: String):
     if not multiplayer.is_server() or player_spawner == null:
         return
-    var match_rules = get_tree().get_first_node_in_group("match_rules")
-    if match_rules != null and match_rules.match_started and match_rules.match_elapsed >= 60.0:
+    var team_size := 1 if mode == "solo" else (2 if mode == "duo" else 4)
+    var match_config := ConfigFile.new()
+    match_config.set_value("game", "mode", "battle_royale")
+    match_config.set_value("game", "team_size", team_size)
+    match_config.save("user://zorix_settings.cfg")
+    if get_tree().get_nodes_in_group("player").size() >= 50:
         multiplayer.multiplayer_peer.disconnect_peer(peer_id)
         return
-    var team_size := _team_size()
-    var capacity := 10 if team_size == 5 else 50
-    if get_tree().get_nodes_in_group("player").size() >= capacity:
-        multiplayer.multiplayer_peer.disconnect_peer(peer_id)
-        return
-    var team_id := _next_team_id()
-    var spawn_side := 1.0 if team_size == 5 and team_id == 0 else -1.0
-    var spawn_position := Vector3(float((peer_id % 5) - 2) * 3.0, 0, 25.0 * spawn_side + float(peer_id % 3) * 3.0)
-    player_spawner.spawn({"peer_id": peer_id, "team_id": team_id, "spawn_position": spawn_position})
-    print("ZORIX PLAYER JOINED | peer=%d | count=%d/%d" % [peer_id, get_tree().get_nodes_in_group("player").size(), capacity])
+    var spawn_position := Vector3(float((peer_id % 5) - 2) * 3.0, 0, -25.0 + float(peer_id % 3) * 3.0)
+    player_spawner.spawn({
+        "peer_id": peer_id,
+        "team_id": team_number,
+        "account_player_id": player_id,
+        "online_match_id": match_id,
+        "spawn_position": spawn_position
+    })
+    if get_tree().get_nodes_in_group("player").size() == 1:
+        call_deferred("_fill_match_with_bots")
+    print("ZORIX VERIFIED PLAYER SPAWNED | peer=%d account=%d match=%d team=%d/%d" % [peer_id, player_id, match_id, team_number, team_size])
 
 func _on_network_peer_disconnected(peer_id: int):
     if not multiplayer.is_server():
@@ -450,7 +462,9 @@ func _setup_player_networking():
     add_child(player_spawner)
     multiplayer.peer_connected.connect(_on_network_peer_connected)
     multiplayer.peer_disconnected.connect(_on_network_peer_disconnected)
-    # Client-host creates its own player; dedicated server waits for remote clients.
+    if ServerFleetAgent.has_signal("peer_authenticated"):
+        ServerFleetAgent.peer_authenticated.connect(_on_peer_authenticated)
+    # A network connection is not trusted until its one-time join ticket is consumed.
 
 func _ready():
     rng.seed = 842771
