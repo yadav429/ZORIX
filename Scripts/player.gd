@@ -78,6 +78,7 @@ func _ready():
     health_replication.add_property(NodePath(".:is_dead"))
     health_replication.add_property(NodePath(".:is_downed"))
     health_replication.add_property(NodePath(".:downed_timer"))
+    health_replication.add_property(NodePath(".:revive_progress"))
     health_replication.add_property(NodePath(".:team_id"))
     health_replication.add_property(NodePath(".:kills"))
     health_replication.add_property(NodePath(".:deaths"))
