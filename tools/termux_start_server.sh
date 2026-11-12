@@ -1,5 +1,5 @@
-#!/data/data/com.termux/files/usr/bin/bash
-# Run this helper from Termux after entering the Ubuntu proot.
+#!/usr/bin/env bash
+# Run this helper from inside the Ubuntu proot environment in Termux.
 set -euo pipefail
 PROJECT_DIR="${ZORIX_PROJECT_DIR:-/opt/zorix}"
 GODOT_BIN="${GODOT_BIN:-/usr/local/bin/godot}"
