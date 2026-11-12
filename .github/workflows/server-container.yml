@@ -1,0 +1,41 @@
+name: ZORIX Dedicated Server Container
+
+on:
+  push:
+    branches: [main, feature/udp-dedicated-server-deploy]
+    paths:
+      - "Dockerfile.server"
+      - "SERVER_DEPLOY.md"
+      - "Scripts/**"
+      - "Scenes/**"
+      - "project.godot"
+      - ".github/workflows/server-container.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "Dockerfile.server"
+      - "SERVER_DEPLOY.md"
+      - "Scripts/**"
+      - "Scenes/**"
+      - "project.godot"
+      - ".github/workflows/server-container.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build headless ENet server image
+        run: docker build --pull -f Dockerfile.server -t zorix-dedicated-server:ci .
+
+      - name: Verify image entrypoint and UDP port metadata
+        run: |
+          docker image inspect zorix-dedicated-server:ci --format '{{json .Config.ExposedPorts}}' | grep -q '24560/udp'
+          docker image inspect zorix-dedicated-server:ci --format '{{json .Config.Cmd}}' | grep -q -- '--server'
