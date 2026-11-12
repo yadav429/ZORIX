@@ -376,8 +376,10 @@ func _build_login_screen() -> void:
     var login_host := VBoxContainer.new()
     login_host.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     stack.add_child(login_host)
-    for child in _get_login_content_children():
-        login_host.add_child(child)
+    # Keep the login controls inside their original VBoxContainer. Reparenting
+    # its children directly fails because they already have a parent, leaving
+    # the visible login card empty on Android.
+    login_host.add_child(player_account.get_meta("login_content"))
 
     var footer := Label.new()
     footer.text = "SECURE ACCOUNT • FREE TO PLAY"
@@ -385,13 +387,6 @@ func _build_login_screen() -> void:
     footer.add_theme_font_size_override("font_size", 10)
     footer.add_theme_color_override("font_color", Color("#78949c"))
     stack.add_child(footer)
-
-
-func _get_login_content_children() -> Array:
-    var result: Array = []
-    for child in player_account.get_meta("login_content").get_children():
-        result.append(child)
-    return result
 
 
 func _on_login_completed(_player_name: String) -> void:
