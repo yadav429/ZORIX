@@ -349,7 +349,7 @@ func _process(delta):
         var status = "HP %d  |  %s %d/%d" % [p.health, str(weapon_data.name), p.ammo, p.reserve_ammo]
         if p.is_downed:
             status += "  |  DOWNED %.0fs" % p.downed_timer
-        elif p.revive_target != null and is_instance_valid(p.revive_target):
+        elif p.is_reviving:
             status += "  |  REVIVING %.1f/4s" % p.revive_progress
         elif p.is_dead:
             status += "  |  ELIMINATED"
