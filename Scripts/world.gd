@@ -114,7 +114,6 @@ func _add_house(x: float, z: float, wall_mat: Material, roof_mat: Material, glas
         window.material_override = glass_mat
         window.position = Vector3(side * 2.45, 2.05, 3.53)
         root.add_child(window)
-        _add_static_box(root, Vector3(side * 2.45, 2.05, 3.56), Vector3(1.5, 1.05, 0.1), glass_mat, Vector3(0.05, 0.05, 0.05))
     var sign := Label3D.new()
     sign.text = "SAFE HOUSE"
     sign.position = Vector3(0, 3.9, 3.9)
@@ -137,7 +136,13 @@ func _add_vehicle(x: float, z: float, body_color: Color, label_text: String) -> 
     chassis.mesh = chassis_mesh
     chassis.material_override = paint
     vehicle.add_child(chassis)
-    _add_static_box(vehicle, Vector3(0, 0.62, -0.15), Vector3(2.05, 0.9, 2.25), dark_glass, Vector3(0.05, 0.05, 0.05))
+    var cabin := MeshInstance3D.new()
+    var cabin_mesh := BoxMesh.new()
+    cabin_mesh.size = Vector3(2.05, 0.9, 2.25)
+    cabin.mesh = cabin_mesh
+    cabin.material_override = dark_glass
+    cabin.position = Vector3(0, 0.62, -0.15)
+    vehicle.add_child(cabin)
     var roof := MeshInstance3D.new()
     var roof_mesh := BoxMesh.new()
     roof_mesh.size = Vector3(2.15, 0.16, 2.35)
