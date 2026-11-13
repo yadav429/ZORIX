@@ -27,6 +27,9 @@ var selected_team_size := 4
 var selected_game_mode := "battle_royale"
 var player_account: Node
 var login_overlay: Control
+var countdown_label: Label
+var countdown_timer: Timer
+var countdown_seconds := 10
 
 func _ready():
     if not ServerFleetAgent.join_validation_received.is_connected(_on_join_ticket_validated):
@@ -133,6 +136,19 @@ func _build_lobby():
     scroll.offset_bottom = -12
     add_child(scroll)
 
+    countdown_label = Label.new()
+    countdown_label.text = ""
+    countdown_label.visible = false
+    countdown_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+    countdown_label.offset_top = 12
+    countdown_label.offset_bottom = 58
+    countdown_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    countdown_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+    countdown_label.add_theme_font_size_override("font_size", 26)
+    countdown_label.add_theme_color_override("font_color", Color("#ffe08a"))
+    countdown_label.z_index = 10
+    add_child(countdown_label)
+
     var center = CenterContainer.new()
     center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     scroll.add_child(center)
@@ -218,8 +234,14 @@ func _build_lobby():
     matchmaking_timer.timeout.connect(_poll_matchmaking)
     add_child(matchmaking_timer)
 
-    var queue_button = _make_button("FIND ONLINE MATCH  •  SOLO / DUO / SQUAD", Color("#167c70"))
-    queue_button.pressed.connect(_queue_for_matchmaking)
+    countdown_timer = Timer.new()
+    countdown_timer.one_shot = false
+    countdown_timer.wait_time = 1.0
+    countdown_timer.timeout.connect(_on_play_countdown_tick)
+    add_child(countdown_timer)
+
+    var queue_button = _make_button("PLAY GAME  •  10 SECOND COUNTDOWN", Color("#167c70"))
+    queue_button.pressed.connect(_play_game)
     content.add_child(queue_button)
 
     var practice_button = _make_button("PLAY PRACTICE MATCH  •  BOTS", Color("#815d24"))
@@ -579,7 +601,35 @@ func _start_practice_match() -> void:
         info_label.text = "Practice match could not start: " + error_string(result)
 
 
+func _play_game() -> void:
+    if matchmaking_busy or countdown_timer == null:
+        return
+    if selected_game_mode != "battle_royale":
+        info_label.text = "Online matchmaking is currently available for Battle Royale only."
+        return
+    if player_account == null or not bool(player_account.call("is_logged_in")):
+        info_label.text = "Google ya Guest se pehle login karein."
+        return
+    countdown_seconds = 10
+    countdown_label.text = "MATCH STARTING IN 10"
+    countdown_label.visible = true
+    info_label.text = "Finding players and preparing the ZORIX match..."
+    countdown_timer.start()
+
+func _on_play_countdown_tick() -> void:
+    countdown_seconds -= 1
+    if countdown_seconds > 0:
+        countdown_label.text = "MATCH STARTING IN %d" % countdown_seconds
+        return
+    countdown_timer.stop()
+    countdown_label.text = "MATCHMAKING..."
+    _queue_for_matchmaking()
+
 func _queue_for_matchmaking():
+    if countdown_timer != null:
+        countdown_timer.stop()
+    if countdown_label != null:
+        countdown_label.visible = false
     if selected_game_mode != "battle_royale":
         info_label.text = "Automatic queue is currently available for Battle Royale. Tactical 5v5 server allocation is next."
         return
