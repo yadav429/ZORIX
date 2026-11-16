@@ -109,159 +109,180 @@ func _panel_style(color: Color, border_color: Color) -> StyleBoxFlat:
     return style
 
 func _build_lobby():
-    var background = ColorRect.new()
+    # Full-screen layout: fixed controls, no scrolling container.
+    var background := ColorRect.new()
     background.color = Color("#07131d")
     background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     add_child(background)
-
-    var scroll = ScrollContainer.new()
-    scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-    scroll.offset_left = 12
-    scroll.offset_top = 12
-    scroll.offset_right = -12
-    scroll.offset_bottom = -12
-    add_child(scroll)
-
-    var center = CenterContainer.new()
+    var root := VBoxContainer.new()
+    root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    root.offset_left = 12
+    root.offset_right = -12
+    root.offset_top = 10
+    root.offset_bottom = -10
+    root.add_theme_constant_override("separation", 8)
+    add_child(root)
+    var header := HBoxContainer.new()
+    header.custom_minimum_size.y = 46
+    root.add_child(header)
+    var logo := Label.new()
+    logo.text = "Z O R I X"
+    logo.add_theme_font_size_override("font_size", 27)
+    logo.add_theme_color_override("font_color", Color("#f3f7f4"))
+    header.add_child(logo)
+    var header_spacer := Control.new()
+    header_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    header.add_child(header_spacer)
+    var season := Label.new()
+    season.text = "INDIA BATTLEFIELD  •  SEASON 01"
+    season.add_theme_color_override("font_color", Color("#f0c477"))
+    header.add_child(season)
+    var body := HBoxContainer.new()
+    body.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    body.add_theme_constant_override("separation", 8)
+    root.add_child(body)
+    var left := VBoxContainer.new()
+    left.custom_minimum_size.x = 118
+    left.add_theme_constant_override("separation", 8)
+    body.add_child(left)
+    for item in ["PROFILE", "FRIENDS", "INVENTORY", "MISSIONS"]:
+        var menu_button := _make_button(item, Color("#193847"))
+        menu_button.custom_minimum_size.y = 46
+        menu_button.add_theme_font_size_override("font_size", 12)
+        menu_button.pressed.connect(func(): info_label.text = item + " selected.")
+        left.add_child(menu_button)
+    var center := VBoxContainer.new()
     center.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    scroll.add_child(center)
-
-    var card = PanelContainer.new()
-    card.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    card.add_theme_stylebox_override("panel", _panel_style(Color("#101e29"), Color("#2a6871")))
-    center.add_child(card)
-
-    var margin = MarginContainer.new()
-    margin.add_theme_constant_override("margin_left", 20)
-    margin.add_theme_constant_override("margin_right", 20)
-    margin.add_theme_constant_override("margin_top", 20)
-    margin.add_theme_constant_override("margin_bottom", 20)
-    card.add_child(margin)
-
-    content = VBoxContainer.new()
-    content.add_theme_constant_override("separation", 11)
-    content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    margin.add_child(content)
-
-    var eyebrow = Label.new()
-    eyebrow.text = "DUAL COMBAT MODES • MOBILE OPTIMIZED"
-    eyebrow.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    eyebrow.add_theme_font_size_override("font_size", 12)
-    eyebrow.add_theme_color_override("font_color", Color("#62d6c6"))
-    content.add_child(eyebrow)
-
-    var title = Label.new()
-    title.text = "Z O R I X"
-    title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    title.add_theme_font_size_override("font_size", 40)
-    title.add_theme_color_override("font_color", Color("#f3f7f4"))
-    content.add_child(title)
-
-    var map_title = Label.new()
-    map_title.text = "INDIA BATTLEFIELD • EXPANDED MAP"
-    map_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    map_title.add_theme_color_override("font_color", Color("#f0c477"))
-    content.add_child(map_title)
-
+    center.add_theme_constant_override("separation", 5)
+    body.add_child(center)
+    var hero_title := Label.new()
+    hero_title.text = "YOUR BATTLEFIELD. YOUR LEGEND."
+    hero_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    hero_title.add_theme_font_size_override("font_size", 17)
+    hero_title.add_theme_color_override("font_color", Color("#f0c477"))
+    center.add_child(hero_title)
+    var preview := SubViewportContainer.new()
+    preview.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    preview.size_flags_vertical = Control.SIZE_EXPAND_FILL
+    preview.stretch = true
+    center.add_child(preview)
+    var viewport := SubViewport.new()
+    viewport.size = Vector2i(800, 600)
+    viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+    preview.add_child(viewport)
+    var stage := Node3D.new()
+    viewport.add_child(stage)
+    var world_env := WorldEnvironment.new()
+    var environment := Environment.new()
+    environment.background_mode = Environment.BG_COLOR
+    environment.background_color = Color("#12232b")
+    environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
+    environment.ambient_light_color = Color("#91b5a8")
+    environment.ambient_light_energy = 0.8
+    world_env.environment = environment
+    stage.add_child(world_env)
+    var camera := Camera3D.new()
+    camera.position = Vector3(3.0, 2.1, 5.8)
+    camera.current = true
+    stage.add_child(camera)
+    camera.look_at(Vector3(0.0, 1.15, 0.0), Vector3.UP)
+    var light := DirectionalLight3D.new()
+    light.rotation_degrees = Vector3(-38.0, -28.0, 0.0)
+    light.light_energy = 1.4
+    stage.add_child(light)
+    var floor := MeshInstance3D.new()
+    var floor_mesh := PlaneMesh.new()
+    floor_mesh.size = Vector2(12.0, 12.0)
+    floor.mesh = floor_mesh
+    floor.position.y = -0.04
+    var floor_material := StandardMaterial3D.new()
+    floor_material.albedo_color = Color("#243a35")
+    floor.material_override = floor_material
+    stage.add_child(floor)
+    var character_scene: PackedScene = load("res://Scenes/LobbyCharacter.tscn")
+    if character_scene != null:
+        var character := character_scene.instantiate()
+        stage.add_child(character)
+    var right := VBoxContainer.new()
+    right.custom_minimum_size.x = 118
+    right.add_theme_constant_override("separation", 8)
+    body.add_child(right)
+    for item in ["STORE", "RANK", "REWARDS", "SETTINGS"]:
+        var menu_button := _make_button(item, Color("#193847"))
+        menu_button.custom_minimum_size.y = 46
+        menu_button.add_theme_font_size_override("font_size", 12)
+        menu_button.pressed.connect(func(): info_label.text = item + " selected.")
+        right.add_child(menu_button)
+    var bottom := VBoxContainer.new()
+    bottom.add_theme_constant_override("separation", 5)
+    root.add_child(bottom)
+    var controls := HBoxContainer.new()
+    controls.add_theme_constant_override("separation", 7)
+    bottom.add_child(controls)
+    mode_picker = OptionButton.new()
+    mode_picker.add_item("SOLO")
+    mode_picker.add_item("DUO")
+    mode_picker.add_item("SQUAD")
+    mode_picker.select([1, 2, 4].find(selected_team_size))
+    selected_mode = ["Solo", "Duo", "Squad"][mode_picker.selected]
+    mode_picker.item_selected.connect(_on_mode_selected)
+    controls.add_child(mode_picker)
+    var br_button := _make_button("BATTLE ROYALE", Color("#254b61"))
+    br_button.pressed.connect(_select_battle_royale)
+    controls.add_child(br_button)
+    var tactical_button := _make_button("TACTICAL 5v5", Color("#8a4b25"))
+    tactical_button.pressed.connect(_select_tactical)
+    controls.add_child(tactical_button)
+    var start_button := _make_button("START MATCH", Color("#167c70"))
+    start_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    start_button.pressed.connect(_play_offline)
+    controls.add_child(start_button)
+    var server_row := HBoxContainer.new()
+    bottom.add_child(server_row)
+    address_input = LineEdit.new()
+    address_input.placeholder_text = "Optional game server IP"
+    address_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    server_row.add_child(address_input)
+    var join_button := _make_button("JOIN SERVER", Color("#254b61"))
+    join_button.pressed.connect(_join_room)
+    server_row.add_child(join_button)
+    info_label = Label.new()
+    info_label.text = "Choose Solo, Duo or Squad, then tap START MATCH."
+    info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    info_label.add_theme_color_override("font_color", Color("#f0c477"))
+    bottom.add_child(info_label)
     player_account = Node.new()
     player_account.name = "PlayerAccount"
     player_account.set_script(PLAYER_ACCOUNT)
     add_child(player_account)
-    player_account.call("build_ui", content)
+    var login_overlay := PanelContainer.new()
+    login_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+    login_overlay.z_index = 20
+    login_overlay.add_theme_stylebox_override("panel", _panel_style(Color("#08151e"), Color("#b58a45")))
+    add_child(login_overlay)
+    var login_margin := MarginContainer.new()
+    login_margin.add_theme_constant_override("margin_left", 28)
+    login_margin.add_theme_constant_override("margin_right", 28)
+    login_margin.add_theme_constant_override("margin_top", 20)
+    login_margin.add_theme_constant_override("margin_bottom", 20)
+    login_overlay.add_child(login_margin)
+    var login_stack := VBoxContainer.new()
+    login_stack.alignment = BoxContainer.ALIGNMENT_CENTER
+    login_stack.add_theme_constant_override("separation", 12)
+    login_margin.add_child(login_stack)
+    var welcome := Label.new()
+    welcome.text = "Z O R I X  •  WELCOME SOLDIER"
+    welcome.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+    welcome.add_theme_font_size_override("font_size", 28)
+    welcome.add_theme_color_override("font_color", Color("#f0c477"))
+    login_stack.add_child(welcome)
+    var login_content := VBoxContainer.new()
+    login_content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    login_stack.add_child(login_content)
+    player_account.call("build_ui", login_content)
     player_account.connect("public_server_loaded", _on_public_server_loaded)
-
-    _add_section("1  CHOOSE YOUR GAME")
-    var br_button = _make_button("BATTLE ROYALE  •  50 PLAYERS", Color("#167c70"))
-    br_button.pressed.connect(_select_battle_royale)
-    content.add_child(br_button)
-
-    var tactical_button = _make_button("TACTICAL 5v5  •  BOMB ARENA", Color("#8a4b25"))
-    tactical_button.pressed.connect(_select_tactical)
-    content.add_child(tactical_button)
-
-    _add_section("2  TEAM SIZE • BATTLE ROYALE")
-    mode_picker = OptionButton.new()
-    mode_picker.add_item("SOLO  •  1 PLAYER PER TEAM")
-    mode_picker.add_item("DUO  •  2 PLAYERS PER TEAM")
-    mode_picker.add_item("SQUAD  •  4 PLAYERS PER TEAM")
-    mode_picker.select([1, 2, 4].find(selected_team_size))
-    selected_mode = ["Solo", "Duo", "Squad"][mode_picker.selected]
-    mode_picker.item_selected.connect(_on_mode_selected)
-    mode_picker.custom_minimum_size.y = 48
-    content.add_child(mode_picker)
-
-    var capacity = Label.new()
-    capacity.text = "BATTLE ROYALE CAPACITY: 50 PLAYERS MAXIMUM"
-    capacity.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    capacity.add_theme_color_override("font_color", Color("#b9cbd0"))
-    content.add_child(capacity)
-
-    _add_section("3  CREATE OR JOIN ROOM")
-    address_input = LineEdit.new()
-    address_input.placeholder_text = "Host IP address (example: 123.45.67.89)"
-    address_input.custom_minimum_size.y = 48
-    address_input.clear_button_enabled = true
-    content.add_child(address_input)
-
-    var host_button = _make_button("CREATE ROOM (HOST)", Color("#167c70"))
-    host_button.pressed.connect(_host_room)
-    content.add_child(host_button)
-
-    var join_button = _make_button("JOIN ROOM BY IP", Color("#254b61"))
-    join_button.pressed.connect(_join_room)
-    content.add_child(join_button)
-
-    var local_button = _make_button("PLAY OFFLINE TRAINING", Color("#354454"))
-    local_button.pressed.connect(_play_offline)
-    content.add_child(local_button)
-
-    _add_section("4  GRAPHICS QUALITY")
-    graphics_picker = OptionButton.new()
-    graphics_picker.add_item("LOW  •  SMOOTH PERFORMANCE")
-    graphics_picker.add_item("BALANCED  •  FREE FIRE STYLE")
-    graphics_picker.add_item("HD  •  SHARPER VISUALS")
-    graphics_picker.select(["low", "balanced", "hd"].find(graphics_quality))
-    graphics_picker.custom_minimum_size.y = 46
-    graphics_picker.item_selected.connect(_on_graphics_quality_selected)
-    content.add_child(graphics_picker)
-
-    _add_section("5  FRAME RATE")
-    fps_picker = OptionButton.new()
-    fps_picker.add_item("30 FPS  •  BATTERY SAVER")
-    fps_picker.add_item("60 FPS  •  SMOOTH")
-    fps_picker.add_item("90 FPS  •  SUPPORTED DEVICES")
-    fps_picker.select(0 if fps_limit <= 30 else (2 if fps_limit >= 90 else 1))
-    fps_picker.custom_minimum_size.y = 46
-    fps_picker.item_selected.connect(_on_fps_selected)
-    content.add_child(fps_picker)
+    player_account.connect("login_completed", func(_player_name: String): login_overlay.queue_free())
     _update_mode_status()
-
-    var panel = PanelContainer.new()
-    panel.add_theme_stylebox_override("panel", _panel_style(Color("#172b36"), Color("#31505b")))
-    content.add_child(panel)
-
-    info_label = Label.new()
-    info_label.text = "Choose Battle Royale or Tactical 5v5, then play offline or create/join a room."
-    info_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    info_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    info_label.add_theme_color_override("font_color", Color("#d8e5e6"))
-    panel.add_child(info_label)
-
-    var note = Label.new()
-    note.text = "Online room networking is a prototype and needs a reachable game server. Supabase matchmaking setup is separate."
-    note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-    note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    note.add_theme_font_size_override("font_size", 11)
-    note.add_theme_color_override("font_color", Color("#8fa8af"))
-    content.add_child(note)
-
-    var footer = Label.new()
-    footer.text = "ZORIX • TRAIN • SURVIVE • WIN"
-    footer.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-    footer.add_theme_font_size_override("font_size", 11)
-    footer.add_theme_color_override("font_color", Color("#78949c"))
-    content.add_child(footer)
-
 func _add_section(text_value: String):
     var label = Label.new()
     label.text = text_value
