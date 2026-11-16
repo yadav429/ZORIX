@@ -268,6 +268,9 @@ func _build_lobby():
     add_child(player_account)
     player_account.connect("public_server_loaded", _on_public_server_loaded)
     player_account.connect("login_completed", _on_login_completed)
+    var login_content := _build_login_content()
+    player_account.call("build_ui", login_content)
+    player_account.set_meta("login_content", login_content)
     _build_login_screen()
     _update_mode_status()
 func _build_login_content() -> VBoxContainer:
