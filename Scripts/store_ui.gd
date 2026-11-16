@@ -21,6 +21,10 @@ var credits := STARTER_CREDITS
 var owned: Array[String] = []
 var equipped := {}
 var active_category := "WEAPON SKINS"
+var api_base_url := ""
+var session_token := ""
+var diamond_request: HTTPRequest
+var diamond_label: Label
 var balance_label: Label
 var items_box: VBoxContainer
 
@@ -28,6 +32,10 @@ func _ready() -> void:
     set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
     _load_store()
     _build()
+
+func configure_session(api_url: String, auth_token: String) -> void:
+    api_base_url = api_url.trim_suffix("/")
+    session_token = auth_token
 
 func _panel_style(bg: Color, border: Color) -> StyleBoxFlat:
     var style := StyleBoxFlat.new()
@@ -84,6 +92,29 @@ func _build() -> void:
     outer.add_child(balance_label)
     _update_balance()
 
+    var diamond_row := HBoxContainer.new()
+    outer.add_child(diamond_row)
+    diamond_label = Label.new()
+    diamond_label.text = "💎 Diamonds: loading..."
+    diamond_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    diamond_row.add_child(diamond_label)
+    var upi_button := Button.new()
+    upi_button.text = "100 💎  •  ₹30 UPI"
+    upi_button.custom_minimum_size = Vector2(150, 48)
+    upi_button.pressed.connect(_create_razorpay_link)
+    diamond_row.add_child(upi_button)
+    var play_button := Button.new()
+    play_button.text = "GOOGLE PLAY BILLING"
+    play_button.custom_minimum_size = Vector2(150, 48)
+    play_button.disabled = true
+    play_button.tooltip_text = "Native Google Play Billing SDK bridge is not yet included in this APK."
+    diamond_row.add_child(play_button)
+    diamond_request = HTTPRequest.new()
+    diamond_request.timeout = 20.0
+    add_child(diamond_request)
+    diamond_request.request_completed.connect(_on_diamond_request_completed)
+    _refresh_diamond_wallet()
+
     var subtitle := Label.new()
     subtitle.text = "PREMIUM COSMETICS  •  PERSONALIZE YOUR LOADOUT"
     subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -109,12 +140,49 @@ func _build() -> void:
     _render_items()
 
     var note := Label.new()
-    note.text = "STORE PREVIEW: credits and cosmetics are saved on this device. Online purchases, server inventory sync and real-money payments are not enabled yet."
+    note.text = "Cosmetic purchases currently use demo Z-Coins. Diamond top-ups are server-verified; ₹30 UPI checkout credits 100 Diamonds after Razorpay webhook confirmation. Google Play native checkout is pending its Android Billing SDK bridge and Play Console product setup."
     note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
     note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
     note.add_theme_font_size_override("font_size", 11)
     note.add_theme_color_override("font_color", Color("#8ba1a9"))
     outer.add_child(note)
+
+func _auth_headers() -> PackedStringArray:
+    return PackedStringArray(["Content-Type: application/json", "Authorization: Bearer " + session_token])
+
+func _refresh_diamond_wallet() -> void:
+    if session_token.is_empty() or api_base_url.is_empty():
+        diamond_label.text = "💎 Login required for online Diamond wallet"
+        return
+    var err := diamond_request.request(api_base_url + "/api/diamonds/wallet", _auth_headers(), HTTPClient.METHOD_GET)
+    if err != OK:
+        diamond_label.text = "💎 Wallet unavailable"
+
+func _create_razorpay_link() -> void:
+    if session_token.is_empty() or api_base_url.is_empty():
+        diamond_label.text = "Please login to purchase Diamonds."
+        return
+    diamond_label.text = "Creating secure ₹30 UPI payment link..."
+    var payload := JSON.stringify({"package_id": "diamonds_100"})
+    var err := diamond_request.request(api_base_url + "/api/diamonds/razorpay/link", _auth_headers(), HTTPClient.METHOD_POST, payload)
+    if err != OK:
+        diamond_label.text = "Could not start UPI checkout."
+
+func _on_diamond_request_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+    var parsed = JSON.parse_string(body.get_string_from_utf8())
+    if result != HTTPRequest.RESULT_SUCCESS:
+        diamond_label.text = "Payment service network error."
+        return
+    if code < 200 or code >= 300:
+        diamond_label.text = str(parsed.get("detail", "Payment service unavailable")) if parsed is Dictionary else "Payment service unavailable"
+        return
+    if parsed is Dictionary and parsed.has("short_url"):
+        OS.shell_open(str(parsed["short_url"]))
+        diamond_label.text = "Razorpay checkout opened. Diamonds arrive after verified payment."
+    elif parsed is Dictionary and parsed.has("diamonds"):
+        diamond_label.text = "💎 Diamonds: " + str(parsed.get("diamonds", 0))
+    else:
+        diamond_label.text = "Payment request processed."
 
 func _select_category(category: String) -> void:
     active_category = category
