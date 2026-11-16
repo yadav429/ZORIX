@@ -162,6 +162,13 @@ jobs:
       - name: Import project and load Android plugin
         run: godot --headless --editor --path . --quit
 
+      - name: Validate PR 40 lobby scene is present
+        run: |
+          set -euo pipefail
+          test -s Scenes/Lobby.tscn
+          test -s Scripts/lobby_3d.gd
+          grep -q 'res://Scripts/lobby_3d.gd' Scenes/Lobby.tscn
+
       - name: Export APK (release when signing secrets are configured)
         env:
           ZORIX_KEYSTORE_BASE64: ${{ secrets.ZORIX_KEYSTORE_BASE64 }}
