@@ -228,3 +228,10 @@ try:
 except ImportError:
     from server_fleet import install_server_fleet_routes
 install_server_fleet_routes(app, db, current_player)
+
+# Verified real-money diamond top-ups (Razorpay webhook + Google Play receipts).
+try:
+    from .payments import install_payment_routes
+except ImportError:
+    from payments import install_payment_routes
+install_payment_routes(app, db, current_player)
