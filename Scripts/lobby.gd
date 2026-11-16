@@ -199,10 +199,10 @@ func _build_lobby():
     floor_material.albedo_color = Color("#243a35")
     floor.material_override = floor_material
     stage.add_child(floor)
-    var character_scene: PackedScene = load("res://Scenes/LobbyCharacter.tscn")
-    if character_scene != null:
-        var character := character_scene.instantiate()
-        stage.add_child(character)
+    # Reuse ZORIX's existing Indian commando visual generator in the lobby preview.
+    var character_visual := Node3D.new()
+    character_visual.set_script(load("res://Scripts/player_visual.gd"))
+    stage.add_child(character_visual)
     var right := VBoxContainer.new()
     right.custom_minimum_size.x = 118
     right.add_theme_constant_override("separation", 8)
