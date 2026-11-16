@@ -26,6 +26,14 @@ class PlayPurchaseRequest(BaseModel):
 
 def install_payment_routes(app: FastAPI, db_factory, current_player):
     def ensure_wallet(con, player_id: int):
+        con.execute("""CREATE TABLE IF NOT EXISTS player_progression (
+            player_id INTEGER PRIMARY KEY, level INTEGER NOT NULL DEFAULT 1,
+            exp INTEGER NOT NULL DEFAULT 0, coins INTEGER NOT NULL DEFAULT 0,
+            red_diamonds INTEGER NOT NULL DEFAULT 0, pink_diamonds INTEGER NOT NULL DEFAULT 0,
+            black_diamonds INTEGER NOT NULL DEFAULT 0, rank_points INTEGER NOT NULL DEFAULT 0,
+            prime_level INTEGER NOT NULL DEFAULT 0, prime_exp INTEGER NOT NULL DEFAULT 0,
+            prime_month_claim TEXT NOT NULL DEFAULT ''
+        )""")
         con.execute("INSERT OR IGNORE INTO player_progression(player_id) VALUES(?)", (player_id,))
         columns = {row[1] for row in con.execute("PRAGMA table_info(player_progression)").fetchall()}
         if "diamonds" not in columns:
