@@ -1,0 +1,170 @@
+extends Node
+
+var account: Node
+var request: HTTPRequest
+var status_label: Label
+var team_mode_picker: OptionButton
+var queue_mode_picker: OptionButton
+var team_name_input: LineEdit
+var invite_input: LineEdit
+var friend_id_input: LineEdit
+var api_base := ""
+
+func build_ui(parent: VBoxContainer, account_node: Node) -> void:
+    account = account_node
+    api_base = str(account.call("get_api_base_url")).trim_suffix("/")
+    request = HTTPRequest.new()
+    request.timeout = 20.0
+    add_child(request)
+    request.request_completed.connect(_on_request_completed)
+
+    var title := Label.new()
+    title.text = "FRIENDS • TEAM • SQUAD"
+    title.add_theme_color_override("font_color", Color("#62d6c6"))
+    title.add_theme_font_size_override("font_size", 16)
+    parent.add_child(title)
+
+    var queue_title := Label.new()
+    queue_title.text = "AUTOMATIC MATCHMAKING"
+    queue_title.add_theme_color_override("font_color", Color("#62d6c6"))
+    queue_title.add_theme_font_size_override("font_size", 16)
+    parent.add_child(queue_title)
+
+    queue_mode_picker = OptionButton.new()
+    queue_mode_picker.add_item("SOLO • 1 PLAYER")
+    queue_mode_picker.add_item("DUO • 2 PLAYERS")
+    queue_mode_picker.add_item("SQUAD • 4 PLAYERS")
+    queue_mode_picker.select(2)
+    queue_mode_picker.custom_minimum_size.y = 44
+    parent.add_child(queue_mode_picker)
+
+    var queue_button := _button("FIND MATCH", Color("#167c70"))
+    queue_button.pressed.connect(_queue_match)
+    parent.add_child(queue_button)
+    var refresh_queue_button := _button("REFRESH MATCH STATUS", Color("#254b61"))
+    refresh_queue_button.pressed.connect(_refresh_match_status)
+    parent.add_child(refresh_queue_button)
+    var cancel_queue_button := _button("CANCEL MATCH SEARCH", Color("#713e3e"))
+    cancel_queue_button.pressed.connect(_cancel_match_search)
+    parent.add_child(cancel_queue_button)
+
+    team_mode_picker = OptionButton.new()
+    team_mode_picker.add_item("DUO • 2 PLAYERS")
+    team_mode_picker.add_item("SQUAD • 4 PLAYERS")
+    team_mode_picker.select(1)
+    team_mode_picker.custom_minimum_size.y = 44
+    parent.add_child(team_mode_picker)
+
+    team_name_input = LineEdit.new()
+    team_name_input.placeholder_text = "Team name (3-24 characters)"
+    team_name_input.custom_minimum_size.y = 44
+    parent.add_child(team_name_input)
+    var create_button := _button("CREATE TEAM", Color("#8a4b25"))
+    create_button.pressed.connect(_create_team)
+    parent.add_child(create_button)
+
+    invite_input = LineEdit.new()
+    invite_input.placeholder_text = "Team invite code"
+    invite_input.custom_minimum_size.y = 44
+    parent.add_child(invite_input)
+    var join_button := _button("JOIN TEAM WITH CODE", Color("#354454"))
+    join_button.pressed.connect(_join_team)
+    parent.add_child(join_button)
+    var leave_button := _button("LEAVE CURRENT TEAM", Color("#713e3e"))
+    leave_button.pressed.connect(_leave_team)
+    parent.add_child(leave_button)
+    var team_button := _button("MY TEAM", Color("#254b61"))
+    team_button.pressed.connect(_my_team)
+    parent.add_child(team_button)
+
+    friend_id_input = LineEdit.new()
+    friend_id_input.placeholder_text = "Friend Player ID (ZX-XXXXXXXX)"
+    friend_id_input.custom_minimum_size.y = 44
+    parent.add_child(friend_id_input)
+    var add_friend_button := _button("SEND FRIEND REQUEST", Color("#167c70"))
+    add_friend_button.pressed.connect(_send_friend_request)
+    parent.add_child(add_friend_button)
+    var friends_button := _button("MY FRIENDS / REQUESTS", Color("#254b61"))
+    friends_button.pressed.connect(_list_friends)
+    parent.add_child(friends_button)
+
+    status_label = Label.new()
+    status_label.text = "Login first. Create a Duo/Squad team or add friends by Player ID."
+    status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+    status_label.add_theme_color_override("font_color", Color("#d8e5e6"))
+    parent.add_child(status_label)
+
+func _button(caption: String, color: Color) -> Button:
+    var b := Button.new()
+    b.text = caption
+    b.custom_minimum_size.y = 46
+    b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+    var style := StyleBoxFlat.new()
+    style.bg_color = color
+    style.set_corner_radius_all(10)
+    b.add_theme_stylebox_override("normal", style)
+    b.add_theme_stylebox_override("pressed", style.duplicate())
+    return b
+
+func _call_api(method: int, path: String, payload: Dictionary = {}) -> void:
+    if account == null or not bool(account.call("is_logged_in")):
+        status_label.text = "Please login with Google or Guest first."
+        return
+    if api_base.is_empty():
+        status_label.text = "Player API URL is not configured."
+        return
+    var headers := PackedStringArray(["Authorization: Bearer " + str(account.call("get_session_token")), "Content-Type: application/json"])
+    var body := "" if method == HTTPClient.METHOD_GET or method == HTTPClient.METHOD_DELETE else JSON.stringify(payload)
+    var err := request.request(api_base + path, headers, method, body)
+    if err != OK:
+        status_label.text = "Request could not start: " + error_string(err)
+
+
+func _queue_match() -> void:
+    var modes := ["solo", "duo", "squad"]
+    var mode := modes[clampi(queue_mode_picker.selected, 0, 2)]
+    _call_api(HTTPClient.METHOD_POST, "/api/matchmaking/queue", {"mode": mode})
+
+func _refresh_match_status() -> void:
+    _call_api(HTTPClient.METHOD_GET, "/api/matchmaking/status")
+
+func _cancel_match_search() -> void:
+    _call_api(HTTPClient.METHOD_DELETE, "/api/matchmaking/queue")
+
+func _create_team() -> void:
+    var mode := "duo" if team_mode_picker.selected == 0 else "squad"
+    _call_api(HTTPClient.METHOD_POST, "/api/teams", {"name": team_name_input.text.strip_edges(), "mode": mode})
+
+func _join_team() -> void:
+    _call_api(HTTPClient.METHOD_POST, "/api/teams/join", {"invite_code": invite_input.text.strip_edges().to_upper()})
+
+func _leave_team() -> void:
+    _call_api(HTTPClient.METHOD_DELETE, "/api/teams/me")
+
+func _my_team() -> void:
+    _call_api(HTTPClient.METHOD_GET, "/api/teams/me")
+
+func _send_friend_request() -> void:
+    _call_api(HTTPClient.METHOD_POST, "/api/friends/request", {"public_id": friend_id_input.text.strip_edges().to_upper()})
+
+func _list_friends() -> void:
+    _call_api(HTTPClient.METHOD_GET, "/api/friends")
+
+func _on_request_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray) -> void:
+    if result != HTTPRequest.RESULT_SUCCESS:
+        status_label.text = "Network error. Check internet/API connection."
+        return
+    var data = JSON.parse_string(body.get_string_from_utf8())
+    if code < 200 or code >= 300:
+        status_label.text = str(data.get("detail", "Request failed")) if data is Dictionary else "Request failed."
+        return
+    if not data is Dictionary:
+        status_label.text = "Server response received."
+    elif data.has("invite_code"):
+        status_label.text = "Team created! Invite code: " + str(data["invite_code"]) + " • Share this with friends."
+    elif data.has("team"):
+        status_label.text = "Your team: " + (JSON.stringify(data["team"]) if data["team"] != null else "No active team")
+    elif data.has("friends"):
+        status_label.text = "Friends / requests: " + JSON.stringify(data["friends"])
+    else:
+        status_label.text = JSON.stringify(data)
