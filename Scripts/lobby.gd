@@ -487,6 +487,7 @@ func _open_store() -> void:
         return
     content.visible = false
     var store := STORE_UI.new()
+    store.configure_session(player_account.get_api_base_url(), player_account.get_session_token())
     add_child(store)
     store.closed.connect(func(): content.visible = true)
 
