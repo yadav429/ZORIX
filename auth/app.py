@@ -20,6 +20,8 @@ GAME_HOST = os.getenv("ZORIX_GAME_HOST", "")
 GAME_PORT = int(os.getenv("ZORIX_GAME_PORT", "24560"))
 GAME_MODE = os.getenv("ZORIX_GAME_MODE", "battle_royale")
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+GOOGLE_ANDROID_CLIENT_ID = os.getenv("GOOGLE_ANDROID_CLIENT_ID", "").strip()
+GOOGLE_ALLOWED_CLIENT_IDS = {value for value in (GOOGLE_CLIENT_ID, GOOGLE_ANDROID_CLIENT_ID) if value}
 MAX_PLAYERS = min(50, max(2, int(os.getenv("ZORIX_MAX_PLAYERS", "50"))))
 
 app = FastAPI(title="ZORIX Player API", version="1.0.0")
@@ -107,13 +109,23 @@ def google_login(body: GoogleToken):
     try:
         from google.oauth2 import id_token
         from google.auth.transport import requests as google_requests
+        # Verify Google's signature, issuer and expiry. Check allowed audiences below.
         claims = id_token.verify_oauth2_token(
             body.id_token,
             google_requests.Request(),
-            GOOGLE_CLIENT_ID,
+            audience=None,
         )
+    except ValueError as exc:
+        if "expired" in str(exc).lower():
+            raise HTTPException(401, "Google ID token expired. Please choose your Google account again.")
+        raise HTTPException(401, "Google ID token is invalid. Please try Google Login again.")
     except Exception:
-        raise HTTPException(401, "Invalid or expired Google ID token")
+        raise HTTPException(503, "Google token verification is temporarily unavailable")
+
+    audience = claims.get("aud", "")
+    audiences = set(audience) if isinstance(audience, list) else {str(audience)}
+    if not GOOGLE_ALLOWED_CLIENT_IDS.intersection(audiences):
+        raise HTTPException(401, "Google OAuth audience mismatch. Check the Web and Android Client IDs.")
 
     subject = str(claims.get("sub", "")).strip()
     email = str(claims.get("email", "")).strip().lower()
