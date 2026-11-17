@@ -79,6 +79,8 @@ func build_ui(parent: VBoxContainer):
     status_label.add_theme_color_override("font_color", Color("#d8e5e6"))
     parent.add_child(status_label)
     _set_busy(false)
+    if not token.is_empty():
+        call_deferred("_resume_session")
 
 func _make_login_button(caption: String, background: Color, foreground: Color) -> Button:
     var button = Button.new()
@@ -105,6 +107,18 @@ func _load_session():
         token = str(cfg.get_value("account", "token", ""))
         player_name = str(cfg.get_value("account", "username", ""))
         api_base_url = str(cfg.get_value("account", "api_url", api_base_url))
+
+func _resume_session() -> void:
+    if token.is_empty():
+        return
+    status_label.text = "Checking saved login session..."
+    request_kind = "resume"
+    var headers := PackedStringArray(["Authorization: Bearer " + token])
+    var err := request.request(_api_base() + "/api/me", headers, HTTPClient.METHOD_GET)
+    if err != OK:
+        status_label.text = "Saved session check failed. Please login again."
+        token = ""
+        _save_session()
 
 func _save_session():
     var cfg = ConfigFile.new()
@@ -168,6 +182,24 @@ func _on_request_completed(result: int, code: int, _headers: PackedStringArray, 
     var parsed = JSON.parse_string(body.get_string_from_utf8())
     if result != HTTPRequest.RESULT_SUCCESS:
         status_label.text = "Network error. Internet aur API URL check karein."
+        return
+    if request_kind == "resume":
+        if code < 200 or code >= 300:
+            token = ""
+            player_name = ""
+            _save_session()
+            status_label.text = "Saved session expired. Please choose Google or Guest again."
+            return
+        if parsed is Dictionary:
+            var saved_player: Dictionary = parsed.get("player", {})
+            player_name = str(saved_player.get("username", player_name))
+            _save_session()
+            status_label.text = "Session restored. Loading public lobby..."
+            _load_public_lobby()
+        else:
+            token = ""
+            _save_session()
+            status_label.text = "Saved session response invalid. Please login again."
         return
     if code < 200 or code >= 300:
         var detail := str(parsed.get("detail", "Login failed")) if parsed is Dictionary else "Request failed."
