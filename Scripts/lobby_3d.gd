@@ -328,20 +328,51 @@ func _show_feature_panel(title_text: String, body_text: String) -> void:
     popup.popup_centered()
 
 func _open_profile() -> void:
-    var name := str(player_account.call("get_player_name")) if player_account != null else "Player"
-    _show_feature_panel("PLAYER PROFILE", "Player: %s\\nAccount ID is assigned by the player API. Match statistics and progression are stored server-side after online match deployment." % name)
+    _open_api_panel("PLAYER PROFILE", "/api/profile")
 
 func _open_inventory() -> void:
-    _show_feature_panel("WEAPON INVENTORY", "In-match weapon inventory is available from the WEAPON / SWITCH control. Pickups add weapons and ammo; owned cosmetics can be equipped in STORE.")
+    _open_api_panel("WEAPON INVENTORY", "/api/inventory")
 
 func _open_events() -> void:
     _show_feature_panel("EVENTS", "Events hub is ready for event data. No live event schedule is configured yet.")
 
 func _open_rank() -> void:
-    _show_feature_panel("RANK & REWARDS", "Rank, level and reward services are provided by the progression API. Open the authenticated progression panel after login to refresh online stats.")
+    _open_api_panel("RANK & LEADERBOARD", "/api/leaderboard?limit=50")
 
 func _open_friends() -> void:
-    _show_feature_panel("FRIENDS & TEAM", "Friends and party invitations require the online social service. Solo, Duo and Squad matchmaking are available from the mode selector.")
+    _open_api_panel("FRIENDS", "/api/friends")
+
+func _open_api_panel(title_text: String, path: String) -> void:
+    if player_account == null or str(player_account.call("get_session_token")).is_empty():
+        _show_feature_panel(title_text, "Please sign in with Google or Guest first.")
+        return
+    var popup := AcceptDialog.new()
+    popup.title = title_text
+    popup.dialog_text = "Loading..."
+    popup.min_size = Vector2i(420, 300)
+    add_child(popup)
+    var req := HTTPRequest.new()
+    req.timeout = 45.0
+    add_child(req)
+    req.request_completed.connect(func(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray):
+        var message := "Network error. Please check your internet connection."
+        if result == HTTPRequest.RESULT_SUCCESS:
+            var parsed = JSON.parse_string(body.get_string_from_utf8())
+            if code >= 200 and code < 300:
+                message = JSON.stringify(parsed, "  ")
+            elif parsed is Dictionary:
+                message = str(parsed.get("detail", "Request failed (HTTP %d)." % code))
+            else:
+                message = "Request failed (HTTP %d)." % code
+        popup.dialog_text = message
+        req.queue_free()
+    )
+    var headers := PackedStringArray(["Authorization: Bearer " + str(player_account.call("get_session_token"))])
+    var err := req.request(str(player_account.call("get_api_base_url")).trim_suffix("/") + path, headers, HTTPClient.METHOD_GET)
+    if err != OK:
+        popup.dialog_text = "Could not start request: " + error_string(err)
+        req.queue_free()
+    popup.popup_centered()
 
 func _open_mail() -> void:
     _show_feature_panel("MAIL", "You have no new system messages.")
