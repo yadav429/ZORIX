@@ -93,6 +93,8 @@ func _load_settings():
         fps_limit = clampi(int(config.get_value("graphics", "fps_limit", 60)), 30, 90)
         selected_game_mode = str(config.get_value("game", "mode", "battle_royale"))
         selected_team_size = clampi(int(config.get_value("game", "team_size", 4)), 1, 4)
+        if selected_game_mode == "tactical_5v5":
+            selected_team_size = 4
 
 func _save_settings():
     var config = ConfigFile.new()
@@ -100,7 +102,7 @@ func _save_settings():
     config.set_value("graphics", "performance", graphics_quality == "low")
     config.set_value("graphics", "fps_limit", fps_limit)
     config.set_value("game", "mode", selected_game_mode)
-    config.set_value("game", "team_size", [1, 2, 4][clampi(mode_picker.selected if mode_picker != null else 2, 0, 2)])
+    config.set_value("game", "team_size", 5 if selected_game_mode == "tactical_5v5" else [1, 2, 4][clampi(mode_picker.selected if mode_picker != null else 2, 0, 2)])
     config.save(SETTINGS_PATH)
     _apply_frame_limit()
 
@@ -222,9 +224,14 @@ func _build_lobby():
     queue_button.pressed.connect(_queue_for_matchmaking)
     content.add_child(queue_button)
 
-    var practice_button = _make_button("PLAY PRACTICE MATCH  •  BOTS", Color("#815d24"))
-    practice_button.pressed.connect(_start_practice_match)
-    content.add_child(practice_button)
+    _add_section("3  PRACTICE MODE • PLAY OFFLINE WITH BOTS")
+    var practice_br_button := _make_button("PRACTICE: BATTLE ROYALE  •  INDIA MAP", Color("#167c70"))
+    practice_br_button.pressed.connect(_start_practice_match.bind("battle_royale"))
+    content.add_child(practice_br_button)
+
+    var practice_5v5_button := _make_button("PRACTICE: TACTICAL 5v5  •  BOMB ARENA", Color("#8a4b25"))
+    practice_5v5_button.pressed.connect(_start_practice_match.bind("tactical_5v5"))
+    content.add_child(practice_5v5_button)
 
     var cancel_queue_button = _make_button("CANCEL SEARCH", Color("#8a4b25"))
     cancel_queue_button.pressed.connect(_cancel_matchmaking)
@@ -564,16 +571,20 @@ func _on_mode_selected(index: int):
     if selected_game_mode == "battle_royale":
         info_label.text = selected_mode + " selected. Match capacity remains 50 players."
 
-func _start_practice_match() -> void:
-    # Local offline practice is available without a registered online server.
+func _start_practice_match(practice_mode: String) -> void:
+    # Each practice button explicitly selects and persists its own game mode.
+    if practice_mode not in ["battle_royale", "tactical_5v5"]:
+        info_label.text = "Unknown practice mode."
+        return
+    selected_game_mode = practice_mode
+    _save_settings()
     matchmaking_timer.stop()
     matchmaking_busy = false
     matchmaking_state = "idle"
     join_ticket = ""
     if matchmaking_request != null and matchmaking_request.get_http_client_status() != HTTPClient.STATUS_DISCONNECTED:
         matchmaking_request.cancel_request()
-    _save_settings()
-    info_label.text = "Starting local practice match with AI soldiers..."
+    info_label.text = "Starting %s practice with AI soldiers..." % ("TACTICAL 5v5" if selected_game_mode == "tactical_5v5" else "BATTLE ROYALE")
     var result := get_tree().change_scene_to_file(MATCH_SCENE)
     if result != OK:
         info_label.text = "Practice match could not start: " + error_string(result)
