@@ -535,7 +535,7 @@ func _make_button(caption: String, color: Color) -> Button:
     return button
 
 func _show_match_mode_selector() -> void:
-    var selector := get_node_or_null("MatchModeSelector")
+    var selector := find_child("MatchModeSelector", true, false)
     if selector != null:
         selector.visible = not selector.visible
     info_label.text = "Choose Battle Royale or 5 VS 5."
