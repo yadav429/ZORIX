@@ -12,6 +12,7 @@ var google_button: Button
 var guest_button: Button
 var advanced_box: VBoxContainer
 var google_sign_in: Object
+var google_refresh_pending := false
 var token := ""
 var player_name := ""
 var api_base_url := "https://zorix-player-api-dnz5.onrender.com"
@@ -35,6 +36,8 @@ func _connect_google_plugin():
         google_sign_in.connect("sign_in_success", _on_google_sign_in_success)
     if not google_sign_in.is_connected("sign_in_failed", _on_google_sign_in_failed):
         google_sign_in.connect("sign_in_failed", _on_google_sign_in_failed)
+    if not google_sign_in.is_connected("sign_out_complete", _on_google_sign_out_complete):
+        google_sign_in.connect("sign_out_complete", _on_google_sign_out_complete)
 
 func build_ui(parent: VBoxContainer):
     var heading = Label.new()
@@ -156,7 +159,21 @@ func _google_login():
     if not google_sign_in.isInitialized():
         google_sign_in.initialize(GOOGLE_WEB_CLIENT_ID)
     _set_busy(true)
-    status_label.text = "Google account chooser opening..."
+    status_label.text = "Refreshing Google sign-in and opening account chooser..."
+    # Credential Manager can reuse a stale cached credential. Sign out first,
+    # then open the chooser only after the plugin confirms sign-out completed.
+    google_refresh_pending = true
+    google_sign_in.signOut()
+
+func _on_google_sign_out_complete() -> void:
+    if not google_refresh_pending:
+        return
+    google_refresh_pending = false
+    if google_sign_in == null:
+        _set_busy(false)
+        status_label.text = "Google Sign-In plugin became unavailable. Please retry."
+        return
+    status_label.text = "Choose your Google account..."
     google_sign_in.signInWithAccountChooser()
 
 func _on_google_sign_in_success(id_token: String, email: String, display_name: String):
