@@ -134,6 +134,7 @@ func _build_lobby() -> void:
     top_row.add_child(_hud_label("◆ 0     ◈ 0", 15, Color("#f0c477")))
     var profile_button := _make_button("PROFILE", Color("#31505b"))
     profile_button.custom_minimum_size = Vector2(92, 42)
+    profile_button.pressed.connect(_open_profile)
     top_row.add_child(profile_button)
 
     var left_panel := _hud_panel(Vector2(0.02, 0.19), Vector2(0.20, 0.67), Color("#101d25d9"))
@@ -147,13 +148,13 @@ func _build_lobby() -> void:
     store_button.pressed.connect(_open_store)
     left_stack.add_child(store_button)
     var inventory_button := _make_button("INVENTORY", Color("#31505b"))
-    inventory_button.pressed.connect(func(): _set_status("Inventory panel is being prepared for the next update."))
+    inventory_button.pressed.connect(_open_inventory)
     left_stack.add_child(inventory_button)
     var events_button := _make_button("EVENTS", Color("#31505b"))
-    events_button.pressed.connect(func(): _set_status("Events panel will appear here."))
+    events_button.pressed.connect(_open_events)
     left_stack.add_child(events_button)
     var rank_button := _make_button("RANK", Color("#31505b"))
-    rank_button.pressed.connect(func(): _set_status("Rank and rewards are available from the progression update."))
+    rank_button.pressed.connect(_open_rank)
     left_stack.add_child(rank_button)
 
     var right_panel := _hud_panel(Vector2(0.79, 0.19), Vector2(0.98, 0.67), Color("#101d25d9"))
@@ -164,10 +165,10 @@ func _build_lobby() -> void:
     right_panel.add_child(right_stack)
     right_stack.add_child(_hud_label("SOCIAL", 13, Color("#f0c477")))
     var friends_button := _make_button("FRIENDS", Color("#31505b"))
-    friends_button.pressed.connect(func(): _set_status("Friends and team invites will be connected here."))
+    friends_button.pressed.connect(_open_friends)
     right_stack.add_child(friends_button)
     var mail_button := _make_button("MAIL", Color("#31505b"))
-    mail_button.pressed.connect(func(): _set_status("No new messages."))
+    mail_button.pressed.connect(_open_mail)
     right_stack.add_child(mail_button)
     var settings_button := _make_button("SETTINGS", Color("#31505b"))
     settings_button.pressed.connect(_open_lobby_settings)
@@ -313,9 +314,47 @@ func _on_login_completed(player_name: String) -> void:
 func _open_lobby_settings() -> void:
     var popup := AcceptDialog.new()
     popup.title = "ZORIX SETTINGS"
-    popup.dialog_text = "Graphics and FPS settings remain available in the match settings menu. Select your mode below and tap START."
+    popup.dialog_text = "Graphics: %s | FPS cap: %d. Change graphics and FPS in the in-match settings panel." % [graphics_quality.to_upper(), fps_limit]
     add_child(popup)
     popup.popup_centered()
+
+func _show_feature_panel(title_text: String, body_text: String) -> void:
+    var popup := AcceptDialog.new()
+    popup.title = title_text
+    popup.dialog_text = body_text
+    add_child(popup)
+    popup.confirmed.connect(popup.queue_free)
+    popup.canceled.connect(popup.queue_free)
+    popup.popup_centered()
+
+func _open_profile() -> void:
+    var name := str(player_account.call("get_player_name")) if player_account != null else "Player"
+    _show_feature_panel("PLAYER PROFILE", "Player: %s\\nAccount ID is assigned by the player API. Match statistics and progression are stored server-side after online match deployment." % name)
+
+func _open_inventory() -> void:
+    _show_feature_panel("WEAPON INVENTORY", "In-match weapon inventory is available from the WEAPON / SWITCH control. Pickups add weapons and ammo; owned cosmetics can be equipped in STORE.")
+
+func _open_events() -> void:
+    _show_feature_panel("EVENTS", "Events hub is ready for event data. No live event schedule is configured yet.")
+
+func _open_rank() -> void:
+    _show_feature_panel("RANK & REWARDS", "Rank, level and reward services are provided by the progression API. Open the authenticated progression panel after login to refresh online stats.")
+
+func _open_friends() -> void:
+    _show_feature_panel("FRIENDS & TEAM", "Friends and party invitations require the online social service. Solo, Duo and Squad matchmaking are available from the mode selector.")
+
+func _open_mail() -> void:
+    _show_feature_panel("MAIL", "You have no new system messages.")
+
+func _open_store() -> void:
+    if player_account == null:
+        _show_feature_panel("STORE", "Please sign in first.")
+        return
+    var store := STORE_UI.new()
+    store.configure_session(player_account.call("get_api_base_url"), player_account.call("get_session_token"))
+    add_child(store)
+    store.closed.connect(func(): _set_hud_enabled(true))
+    _set_hud_enabled(false)
 
 func _process(delta: float) -> void:
     if preview_camera != null:
