@@ -708,3 +708,16 @@ func _on_fps_selected(index: int):
 func _exit_tree():
     if multiplayer.multiplayer_peer != null:
         multiplayer.multiplayer_peer.close()
+
+# Shared mode-status updater used by both the classic lobby and the 3D HUD.
+# Keeping this in the base script also allows Godot's headless parser to
+# validate lobby_3d.gd inheritance before Android export.
+func _update_mode_status() -> void:
+    var mode_name := "TACTICAL 5v5" if selected_game_mode == "tactical_5v5" else "BATTLE ROYALE"
+    var player_count := 10 if selected_game_mode == "tactical_5v5" else MAX_PLAYERS
+    var team_label := "5v5" if selected_game_mode == "tactical_5v5" else selected_mode.to_upper()
+    var message := "%s  •  %s  •  UP TO %d PLAYERS" % [mode_name, team_label, player_count]
+    if has_method("_set_status"):
+        call("_set_status", message)
+    elif info_label != null:
+        info_label.text = message
