@@ -162,6 +162,17 @@ jobs:
       - name: Import project and load Android plugin
         run: godot --headless --editor --path . --quit
 
+      - name: Smoke-test Android startup scene
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          godot --headless --path . --quit-after 5 2>&1 | tee /tmp/zorix-startup.log
+          if grep -E 'SCRIPT ERROR|Parse Error|Failed loading resource|ERROR:' /tmp/zorix-startup.log; then
+            echo "::error::ZORIX startup scene reported runtime errors."
+            exit 1
+          fi
+          echo "ZORIX main scene startup smoke test passed."
+
       - name: Validate PR 40 lobby scene is present
         run: |
           set -euo pipefail
