@@ -211,10 +211,6 @@ func _build_lobby() -> void:
     start_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     start_button.pressed.connect(_queue_for_matchmaking)
     actions.add_child(start_button)
-    var practice_button := _make_button("PRACTICE", Color("#765324"))
-    practice_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-    practice_button.pressed.connect(_start_practice_match)
-    actions.add_child(practice_button)
     var cancel_button := _make_button("CANCEL", Color("#80412d"))
     cancel_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
     cancel_button.pressed.connect(_cancel_matchmaking)
