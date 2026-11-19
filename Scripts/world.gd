@@ -422,9 +422,10 @@ func _on_network_peer_connected(peer_id: int):
 func _on_peer_authenticated(peer_id: int, player_id: int, match_id: int, team_number: int, mode: String):
     if not multiplayer.is_server() or player_spawner == null:
         return
-    var team_size := 1 if mode == "solo" else (2 if mode == "duo" else 4)
+    var tactical_mode := mode == "tactical_5v5"
+    var team_size := 5 if tactical_mode else (1 if mode == "solo" else (2 if mode == "duo" else 4))
     var match_config := ConfigFile.new()
-    match_config.set_value("game", "mode", "battle_royale")
+    match_config.set_value("game", "mode", "tactical_5v5" if tactical_mode else "battle_royale")
     match_config.set_value("game", "team_size", team_size)
     match_config.save("user://zorix_settings.cfg")
     if get_tree().get_nodes_in_group("player").size() >= 50:
