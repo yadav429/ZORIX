@@ -183,19 +183,21 @@ class ServerFleetTests(unittest.TestCase):
         finally:
             con.close()
 
-        allocated = client.post(
-            "/api/internal/matches/allocate", headers=headers,
-            json={"mode": "tactical_5v5", "limit": 10}
+        token = issue_token(ids[0], "tactical0")
+        status = client.get(
+            "/api/matchmaking/status",
+            headers={"Authorization": f"Bearer {token}"}
         )
-        self.assertEqual(allocated.status_code, 200, allocated.text)
-        self.assertEqual(allocated.json()["status"], "allocated")
-        self.assertEqual(allocated.json()["players"], 10)
+        self.assertEqual(status.status_code, 200, status.text)
+        self.assertEqual(status.json()["status"], "allocated")
+        self.assertEqual(status.json()["mode"], "tactical_5v5")
+        self.assertEqual(status.json()["server"]["port"], 24562)
 
         con = db()
         try:
             teams = con.execute(
                 "SELECT team_number,COUNT(*) AS members FROM match_players WHERE match_id=? GROUP BY team_number ORDER BY team_number",
-                (allocated.json()["match_id"],)
+                (status.json()["match_id"],)
             ).fetchall()
             self.assertEqual([(row["team_number"], row["members"]) for row in teams], [(0, 5), (1, 5)])
         finally:
