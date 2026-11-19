@@ -43,7 +43,10 @@ func _ready():
 
     _load_settings()
     _apply_frame_limit()
+    SoundManager.apply_graphics_quality(graphics_quality)
+    SoundManager.apply_fps_limit(fps_limit)
     _build_lobby()
+    SoundManager.play_lobby_music()
 
 func _is_dedicated_server() -> bool:
     return OS.has_feature("dedicated_server") or OS.get_cmdline_user_args().has("--server")
@@ -88,9 +91,9 @@ func _load_settings():
     var config = ConfigFile.new()
     if config.load(SETTINGS_PATH) == OK:
         graphics_quality = str(config.get_value("graphics", "quality", "performance" if bool(config.get_value("graphics", "performance", false)) else "balanced"))
-        if graphics_quality not in ["low", "balanced", "hd"]:
+        if graphics_quality not in ["low", "balanced", "hd", "ultra"]:
             graphics_quality = "balanced"
-        fps_limit = clampi(int(config.get_value("graphics", "fps_limit", 60)), 30, 90)
+        fps_limit = clampi(int(config.get_value("graphics", "fps_limit", 60)), 30, 120)
         selected_game_mode = str(config.get_value("game", "mode", "battle_royale"))
         selected_team_size = clampi(int(config.get_value("game", "team_size", 4)), 1, 5)
         if selected_game_mode == "tactical_5v5":
@@ -204,14 +207,16 @@ func _build_lobby():
     graphics_picker.add_item("LOW")
     graphics_picker.add_item("BALANCED")
     graphics_picker.add_item("HD")
-    graphics_picker.select(["low", "balanced", "hd"].find(graphics_quality))
+    graphics_picker.add_item("ULTRA")
+    graphics_picker.select(["low", "balanced", "hd", "ultra"].find(graphics_quality))
     graphics_picker.item_selected.connect(_on_graphics_quality_selected)
     settings_column.add_child(graphics_picker)
     fps_picker = OptionButton.new()
     fps_picker.add_item("30 FPS")
     fps_picker.add_item("60 FPS")
     fps_picker.add_item("90 FPS")
-    fps_picker.select(0 if fps_limit <= 30 else (2 if fps_limit >= 90 else 1))
+    fps_picker.add_item("120 FPS")
+    fps_picker.select(0 if fps_limit <= 30 else (3 if fps_limit >= 120 else (2 if fps_limit >= 90 else 1)))
     fps_picker.item_selected.connect(_on_fps_selected)
     settings_column.add_child(fps_picker)
     settings_button.pressed.connect(func(): settings_panel.visible = not settings_panel.visible)
