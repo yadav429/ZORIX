@@ -142,5 +142,64 @@ class ServerFleetTests(unittest.TestCase):
         self.assertEqual(consumed.json()["team_number"], 0)
         self.assertEqual(consumed.json()["mode"], "solo")
 
+    def test_tactical_5v5_allocates_two_balanced_teams(self):
+        client = TestClient(app)
+        secret = os.environ["ZORIX_SERVER_SECRET"]
+        headers = {"X-Zorix-Server-Secret": secret}
+        registered = client.post("/api/internal/servers/register", headers=headers, json={
+            "name": "tactical-ci-server", "host": "127.0.0.3", "port": 24562,
+            "mode": "tactical_5v5", "region": "test", "max_players": 10
+        })
+        self.assertEqual(registered.status_code, 200, registered.text)
+        server_id = registered.json()["server_id"]
+        server_headers = {**headers, "X-Zorix-Server-Id": server_id}
+        heartbeat = client.post(
+            f"/api/internal/servers/{server_id}/heartbeat",
+            headers=server_headers, json={"active_players": 0, "reserved_players": 0}
+        )
+        self.assertEqual(heartbeat.status_code, 200, heartbeat.text)
+
+        con = db()
+        try:
+            con.execute("""
+                CREATE TABLE IF NOT EXISTS match_queue (
+                    player_id INTEGER PRIMARY KEY, mode TEXT NOT NULL,
+                    team_id INTEGER, queued_at INTEGER NOT NULL
+                )
+            """)
+            ids = []
+            for suffix in range(10):
+                cur = con.execute(
+                    "INSERT INTO players(username,salt,password_hash,created_at) VALUES(?,?,?,?)",
+                    (f"tactical{suffix}", "00", "unused", 1)
+                )
+                player_id = cur.lastrowid
+                ids.append(player_id)
+                con.execute(
+                    "INSERT INTO match_queue(player_id,mode,team_id,queued_at) VALUES(?, 'tactical_5v5', NULL, ?)",
+                    (player_id, suffix)
+                )
+            con.commit()
+        finally:
+            con.close()
+
+        allocated = client.post(
+            "/api/internal/matches/allocate", headers=headers,
+            json={"mode": "tactical_5v5", "limit": 10}
+        )
+        self.assertEqual(allocated.status_code, 200, allocated.text)
+        self.assertEqual(allocated.json()["status"], "allocated")
+        self.assertEqual(allocated.json()["players"], 10)
+
+        con = db()
+        try:
+            teams = con.execute(
+                "SELECT team_number,COUNT(*) AS members FROM match_players WHERE match_id=? GROUP BY team_number ORDER BY team_number",
+                (allocated.json()["match_id"],)
+            ).fetchall()
+            self.assertEqual([(row["team_number"], row["members"]) for row in teams], [(0, 5), (1, 5)])
+        finally:
+            con.close()
+
 if __name__ == "__main__":
     unittest.main()
