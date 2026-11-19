@@ -161,11 +161,12 @@ def install_server_fleet_routes(app, db_factory, current_player):
             # Serialize allocation decisions so concurrent workers cannot reserve the same queue rows.
             con.execute("BEGIN IMMEDIATE")
             now = int(time.time())
+            requested_slots = 10 if body.mode == "tactical_5v5" else body.limit
             server = con.execute("""SELECT * FROM game_servers
                 WHERE status='online' AND last_heartbeat>=? AND (mode=? OR (? != 'tactical_5v5' AND mode='battle_royale'))
                 AND max_players-active_players-reserved_players>=?
                 ORDER BY (max_players-active_players-reserved_players) DESC LIMIT 1""",
-                (now - HEARTBEAT_TTL, body.mode, body.mode, body.limit)).fetchone()
+                (now - HEARTBEAT_TTL, body.mode, body.mode, requested_slots)).fetchone()
             if server is None:
                 con.rollback()
                 return {"status": "waiting", "reason": "No healthy server has enough free slots"}
