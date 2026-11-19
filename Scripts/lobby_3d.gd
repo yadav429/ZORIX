@@ -20,8 +20,8 @@ func _build_lobby() -> void:
     add_child(viewport_container)
 
     var viewport := SubViewport.new()
-    viewport.size = Vector2i(960, 540)
-    viewport.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+    viewport.size = Vector2i(640, 360)
+    viewport.render_target_update_mode = SubViewport.UPDATE_WHEN_VISIBLE
     viewport.handle_input_locally = false
     viewport_container.add_child(viewport)
 
@@ -49,7 +49,7 @@ func _build_lobby() -> void:
     var key_light := DirectionalLight3D.new()
     key_light.rotation_degrees = Vector3(-42.0, -25.0, 0.0)
     key_light.light_energy = 1.55
-    key_light.shadow_enabled = true
+    key_light.shadow_enabled = false
     stage.add_child(key_light)
 
     var fill := OmniLight3D.new()
@@ -109,11 +109,9 @@ func _build_lobby() -> void:
     platform.material_override = platform_mat
     stage.add_child(platform)
 
-    var character_scene: PackedScene = load("res://Scenes/LobbyCharacter.tscn")
-    if character_scene != null:
-        var character := character_scene.instantiate()
-        character.position.y = 0.12
-        stage.add_child(character)
+    # Load the procedural soldier after the first frame so the login UI can appear
+    # before the heavier character mesh is created on lower-end Android devices.
+    call_deferred("_spawn_lobby_character", stage)
 
     # Dark gradient-like HUD surfaces keep text readable over the 3D scene.
     hud = Control.new()
@@ -234,6 +232,18 @@ func _build_lobby() -> void:
     player_account.connect("login_completed", _on_login_completed)
     _build_login_screen()
     _set_hud_enabled(false)
+
+func _spawn_lobby_character(stage: Node3D) -> void:
+    await get_tree().create_timer(1.0).timeout
+    if not is_instance_valid(stage):
+        return
+    var character_scene: PackedScene = load("res://Scenes/LobbyCharacter.tscn")
+    if character_scene == null:
+        push_warning("ZORIX lobby character scene could not be loaded.")
+        return
+    var character := character_scene.instantiate()
+    character.position.y = 0.12
+    stage.add_child(character)
 
 func _hud_panel(from: Vector2, to: Vector2, color: Color) -> PanelContainer:
     var panel := PanelContainer.new()
