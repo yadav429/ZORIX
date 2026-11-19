@@ -251,11 +251,20 @@ func _build_lobby():
     mode_buttons.add_theme_constant_override("separation", 7)
     mode_column.add_child(mode_buttons)
     var br_button := _make_button("BATTLE ROYALE", Color("#254b61"))
-    br_button.pressed.connect(_start_selected_match.bind("battle_royale"))
+    br_button.pressed.connect(_select_match_mode.bind("battle_royale"))
     mode_buttons.add_child(br_button)
     var tactical_button := _make_button("5 VS 5", Color("#8a4b25"))
-    tactical_button.pressed.connect(_start_selected_match.bind("tactical_5v5"))
+    tactical_button.pressed.connect(_select_match_mode.bind("tactical_5v5"))
     mode_buttons.add_child(tactical_button)
+    var online_button := _make_button("ONLINE MATCH", Color("#287b65"))
+    online_button.pressed.connect(_queue_for_matchmaking)
+    mode_column.add_child(online_button)
+    var practice_button := _make_button("PRACTICE MATCH", Color("#42586a"))
+    practice_button.pressed.connect(_start_selected_practice)
+    mode_column.add_child(practice_button)
+    var cancel_queue_button := _make_button("CANCEL QUEUE", Color("#633d3d"))
+    cancel_queue_button.pressed.connect(_cancel_matchmaking)
+    mode_column.add_child(cancel_queue_button)
 
     mode_picker = OptionButton.new()
     mode_picker.add_item("SOLO")
@@ -540,6 +549,27 @@ func _show_match_mode_selector() -> void:
         selector.visible = not selector.visible
     info_label.text = "Choose Battle Royale or 5 VS 5."
 
+func _select_match_mode(game_mode: String) -> void:
+    if game_mode not in ["battle_royale", "tactical_5v5"]:
+        info_label.text = "Invalid match mode."
+        return
+    selected_game_mode = game_mode
+    if game_mode == "tactical_5v5":
+        selected_team_size = 5
+        if mode_picker != null:
+            mode_picker.visible = false
+        info_label.text = "5 VS 5 selected. Choose ONLINE MATCH or PRACTICE MATCH."
+    else:
+        if mode_picker != null:
+            mode_picker.visible = true
+        selected_team_size = [1, 2, 4][clampi(mode_picker.selected if mode_picker != null else 2, 0, 2)]
+        selected_mode = ["Solo", "Duo", "Squad"][clampi(mode_picker.selected if mode_picker != null else 2, 0, 2)]
+        info_label.text = "Battle Royale selected: " + selected_mode + ". Choose ONLINE MATCH or PRACTICE MATCH."
+    _save_settings()
+
+func _start_selected_practice() -> void:
+    _start_selected_match(selected_game_mode)
+
 func _start_selected_match(game_mode: String) -> void:
     if game_mode not in ["battle_royale", "tactical_5v5"]:
         info_label.text = "Invalid match mode."
@@ -571,8 +601,8 @@ func _on_mode_selected(index: int):
         info_label.text = selected_mode + " selected for Battle Royale."
 
 func _queue_for_matchmaking():
-    if selected_game_mode != "battle_royale":
-        info_label.text = "Automatic queue is currently available for Battle Royale. Tactical 5v5 server allocation is next."
+    if selected_game_mode not in ["battle_royale", "tactical_5v5"]:
+        info_label.text = "Please choose Battle Royale or 5 VS 5 first."
         return
     if player_account == null or not bool(player_account.call("is_logged_in")):
         info_label.text = "Google ya Guest se pehle login karein."
@@ -581,7 +611,8 @@ func _queue_for_matchmaking():
         return
     _save_settings()
     matchmaking_state = "queue"
-    _send_matchmaking_request("/api/matchmaking/queue", HTTPClient.METHOD_POST, {"mode": selected_mode.to_lower()})
+    var queue_mode := selected_mode.to_lower() if selected_game_mode == "battle_royale" else "tactical_5v5"
+    _send_matchmaking_request("/api/matchmaking/queue", HTTPClient.METHOD_POST, {"mode": queue_mode})
 
 func _cancel_matchmaking():
     matchmaking_timer.stop()

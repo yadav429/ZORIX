@@ -14,11 +14,11 @@ class FriendRequest(BaseModel):
     username: str = Field(min_length=3, max_length=20)
 class TeamCreate(BaseModel):
     name: str = Field(min_length=3, max_length=24)
-    mode: str = Field(pattern="^(solo|duo|squad)$")
+    mode: str = Field(pattern="^(solo|duo|squad|tactical_5v5)$")
 class TeamJoin(BaseModel):
     invite_code: str = Field(min_length=6, max_length=12)
 class QueueRequest(BaseModel):
-    mode: str = Field(pattern="^(solo|duo|squad)$")
+    mode: str = Field(pattern="^(solo|duo|squad|tactical_5v5)$")
 class EquipSkin(BaseModel):
     skin_id: str = Field(min_length=2, max_length=48)
 class MatchResult(BaseModel):
@@ -151,7 +151,7 @@ def install_game_feature_routes(app, db_factory, current_player):
         try:
             team=con.execute("SELECT * FROM game_teams WHERE invite_code=?",(body.invite_code.upper(),)).fetchone()
             if team is None: raise HTTPException(404,"Team invite not found")
-            cap={"solo":1,"duo":2,"squad":4}[team["mode"]]
+            cap={"solo":1,"duo":2,"squad":4,"tactical_5v5":5}[team["mode"]]
             count=con.execute("SELECT COUNT(*) n FROM team_members WHERE team_id=?",(team["id"],)).fetchone()["n"]
             if count>=cap: raise HTTPException(409,"Team is full")
             con.execute("INSERT INTO team_members(team_id,player_id,joined_at) VALUES(?,?,?)",(team["id"],player["id"],int(time.time())))
@@ -195,7 +195,7 @@ def install_game_feature_routes(app, db_factory, current_player):
             con.execute("INSERT INTO match_queue(player_id,mode,team_id,queued_at) VALUES(?,?,?,?) ON CONFLICT(player_id) DO UPDATE SET mode=excluded.mode,team_id=excluded.team_id,queued_at=excluded.queued_at",(player["id"],body.mode,tid,int(time.time())))
             con.commit()
             waiting=con.execute("SELECT COUNT(*) n FROM match_queue WHERE mode=?",(body.mode,)).fetchone()["n"]
-            return {"status":"queued","mode":body.mode,"players_waiting":waiting,"max_players":50,"note":"Queue saved. Poll /api/matchmaking/status for automatic server allocation."}
+            return {"status":"queued","mode":body.mode,"players_waiting":waiting,"max_players":(10 if body.mode=="tactical_5v5" else 50),"players_required":(10 if body.mode=="tactical_5v5" else 2),"note":"Queue saved. Poll /api/matchmaking/status for automatic server allocation."}
         finally: con.close()
 
     @router.delete("/matchmaking/queue")
