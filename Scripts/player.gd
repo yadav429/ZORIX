@@ -370,6 +370,7 @@ func shoot():
     if camera == null:
         return
     shoot_timer = float(get_weapon_data().cooldown)
+    SoundManager.play_sfx("gun_fire")
     var direction = -camera.global_transform.basis.z
     if multiplayer.is_server():
         _server_fire(direction)

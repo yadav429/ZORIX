@@ -74,11 +74,17 @@ func _server_headers() -> PackedStringArray:
 func _register_server() -> void:
     var port := int(_arg_value("--port=", "24560"))
     var max_players := int(_arg_value("--max-players=", "50"))
+    var server_mode := _arg_value("--mode=", OS.get_environment("ZORIX_SERVER_MODE"))
+    if server_mode.is_empty():
+        server_mode = "battle_royale"
+    if server_mode not in ["battle_royale", "tactical_5v5"]:
+        push_error("ZORIX server agent: --mode must be battle_royale or tactical_5v5.")
+        return
     var payload := {
         "name": OS.get_environment("ZORIX_SERVER_NAME") if not OS.get_environment("ZORIX_SERVER_NAME").is_empty() else "zorix-br-" + str(OS.get_process_id()),
         "host": public_host,
         "port": port,
-        "mode": "battle_royale",
+        "mode": server_mode,
         "region": region,
         "max_players": clampi(max_players, 2, 50)
     }

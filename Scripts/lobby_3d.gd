@@ -313,10 +313,51 @@ func _on_login_completed(player_name: String) -> void:
 
 func _open_lobby_settings() -> void:
     var popup := AcceptDialog.new()
-    popup.title = "ZORIX SETTINGS"
-    popup.dialog_text = "Graphics: %s | FPS cap: %d. Change graphics and FPS in the in-match settings panel." % [graphics_quality.to_upper(), fps_limit]
+    popup.title = "ZORIX GRAPHICS & SOUND"
+    popup.min_size = Vector2i(440, 520)
+    var stack := VBoxContainer.new()
+    stack.add_theme_constant_override("separation", 10)
+    popup.add_child(stack)
+
+    stack.add_child(_hud_label("GRAPHICS QUALITY", 13, Color("#f0c477")))
+    var graphics_options := OptionButton.new()
+    for option in ["LOW", "BALANCED", "HD", "ULTRA"]:
+        graphics_options.add_item(option)
+    graphics_options.select(["low", "balanced", "hd", "ultra"].find(graphics_quality))
+    graphics_options.item_selected.connect(func(index: int):
+        graphics_quality = ["low", "balanced", "hd", "ultra"][index]
+        SoundManager.apply_graphics_quality(graphics_quality)
+        _save_settings()
+    )
+    stack.add_child(graphics_options)
+
+    stack.add_child(_hud_label("FRAME RATE LIMIT", 13, Color("#f0c477")))
+    var fps_options := OptionButton.new()
+    for option in ["30 FPS", "60 FPS", "90 FPS", "120 FPS"]:
+        fps_options.add_item(option)
+    fps_options.select(0 if fps_limit <= 30 else (3 if fps_limit >= 120 else (2 if fps_limit >= 90 else 1)))
+    fps_options.item_selected.connect(func(index: int):
+        fps_limit = [30, 60, 90, 120][index]
+        SoundManager.apply_fps_limit(fps_limit)
+        _save_settings()
+    )
+    stack.add_child(fps_options)
+
+    _add_audio_slider(stack, "MASTER VOLUME", SoundManager.master_volume, SoundManager.set_master_volume)
+    _add_audio_slider(stack, "LOBBY MUSIC", SoundManager.music_volume, SoundManager.set_music_volume)
+    _add_audio_slider(stack, "SOUND EFFECTS", SoundManager.sfx_volume, SoundManager.set_sfx_volume)
     add_child(popup)
     popup.popup_centered()
+
+func _add_audio_slider(parent: VBoxContainer, caption_text: String, initial_value: float, callback: Callable) -> void:
+    parent.add_child(_hud_label(caption_text, 12, Color("#d7e5e5")))
+    var slider := HSlider.new()
+    slider.min_value = 0.0
+    slider.max_value = 1.0
+    slider.step = 0.05
+    slider.value = initial_value
+    slider.value_changed.connect(func(value: float): callback.call(value))
+    parent.add_child(slider)
 
 func _show_feature_panel(title_text: String, body_text: String) -> void:
     var popup := AcceptDialog.new()
