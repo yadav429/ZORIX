@@ -162,7 +162,7 @@ def install_server_fleet_routes(app, db_factory, current_player):
             con.execute("BEGIN IMMEDIATE")
             now = int(time.time())
             server = con.execute("""SELECT * FROM game_servers
-                WHERE status='online' AND last_heartbeat>=? AND (mode=? OR (?!='tactical_5v5' AND mode='battle_royale'))
+                WHERE status='online' AND last_heartbeat>=? AND (mode=? OR (? != 'tactical_5v5' AND mode='battle_royale'))
                 AND max_players-active_players-reserved_players>=?
                 ORDER BY (max_players-active_players-reserved_players) DESC LIMIT 1""",
                 (now - HEARTBEAT_TTL, body.mode, body.mode, body.limit)).fetchone()
@@ -191,28 +191,58 @@ def install_server_fleet_routes(app, db_factory, current_player):
             # Keep complete teams: a 50-slot server can host 48 Squad players.
             team_size = 5 if body.mode == "tactical_5v5" else (4 if body.mode == "squad" else 2 if body.mode == "duo" else 1)
             raw_capacity = min(body.limit, int(server["max_players"]))
-            capacity = raw_capacity - (raw_capacity % team_size)
-            minimum_two_teams = team_size * 2
-            required = min(capacity, max(minimum_two_teams, body.min_players if body.min_players is not None else capacity))
             selected = []
-            for unit in units:
-                if len(selected) + len(unit) > capacity:
-                    continue
-                selected.extend(unit)
-                if len(selected) >= required:
-                    break
-            if len(selected) < required:
-                con.rollback()
-                return {"status": "waiting", "players_ready": len(selected),
-                        "players_required": required, "server_capacity": capacity}
+            selected_team_numbers = {}
+            if body.mode == "tactical_5v5":
+                # A tactical match is exactly two balanced teams of five.
+                capacity = min(10, raw_capacity)
+                team_loads = [0, 0]
+                for unit in units:
+                    if len(unit) > 5:
+                        continue
+                    candidates = sorted((0, 1), key=lambda team: team_loads[team])
+                    target_team = -1
+                    for candidate_team in candidates:
+                        if team_loads[candidate_team] + len(unit) <= 5:
+                            target_team = candidate_team
+                            break
+                    if target_team < 0:
+                        continue
+                    for pid in unit:
+                        selected.append(pid)
+                        selected_team_numbers[pid] = target_team
+                    team_loads[target_team] += len(unit)
+                    if team_loads == [5, 5]:
+                        break
+                required = 10
+                if team_loads != [5, 5]:
+                    con.rollback()
+                    return {"status": "waiting", "players_ready": len(selected),
+                            "players_required": required, "team_sizes": team_loads,
+                            "server_capacity": capacity}
+            else:
+                capacity = raw_capacity - (raw_capacity % team_size)
+                minimum_two_teams = team_size * 2
+                required = min(capacity, max(minimum_two_teams, body.min_players if body.min_players is not None else capacity))
+                for unit in units:
+                    if len(selected) + len(unit) > capacity:
+                        continue
+                    selected.extend(unit)
+                    if len(selected) >= required:
+                        break
+                if len(selected) < required:
+                    con.rollback()
+                    return {"status": "waiting", "players_ready": len(selected),
+                            "players_required": required, "server_capacity": capacity}
             cur = con.execute("INSERT INTO game_matches(mode,status,created_at) VALUES(?,?,?)",
                               (body.mode, "allocated", now))
             match_id = int(cur.lastrowid)
             con.execute("INSERT INTO match_server_assignments(match_id,server_id,assigned_at) VALUES(?,?,?)",
                         (match_id, server["server_id"], now))
             for index, pid in enumerate(selected):
+                team_number = selected_team_numbers[pid] if body.mode == "tactical_5v5" else index // team_size
                 con.execute("INSERT INTO match_players(match_id,player_id,team_number) VALUES(?,?,?)",
-                            (match_id, pid, index // team_size))
+                            (match_id, pid, team_number))
                 con.execute("DELETE FROM match_queue WHERE player_id=?", (pid,))
             con.execute("UPDATE game_servers SET reserved_players=reserved_players+?,last_heartbeat=? WHERE server_id=?",
                         (len(selected), now, server["server_id"]))
