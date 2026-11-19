@@ -27,6 +27,7 @@ textures/vram_compression/import_etc2_astc=true
 
 [autoload]
 ServerFleetAgent="*res://Scripts/server_fleet_agent.gd"
+SoundManager="*res://Scripts/graphics_audio_manager.gd"
 
 [editor_plugins]
 
